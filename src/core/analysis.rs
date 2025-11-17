@@ -20,9 +20,11 @@ pub fn compute_dps_series(events: &[CombatEvent], window: Duration) -> Vec<DpsSa
         let time = Duration::from_millis(index as u64 * window_millis);
         samples.push(DpsSample {
             time,
-            total_dps: 0.0,
-            by_weapon: HashMap::<WeaponName, f32>::new(),
-            by_target: HashMap::<EntityName, f32>::new(),
+            outgoing_dps: 0.0,
+            incoming_dps: 0.0,
+            outgoing_by_weapon: HashMap::<WeaponName, f32>::new(),
+            outgoing_by_target: HashMap::<EntityName, f32>::new(),
+            incoming_by_source: HashMap::<EntityName, f32>::new(),
         });
     }
 
@@ -33,18 +35,25 @@ pub fn compute_dps_series(events: &[CombatEvent], window: Duration) -> Vec<DpsSa
         let slot_index = (timestamp_millis / window_millis) as usize;
         if let Some(sample) = samples.get_mut(slot_index) {
             let dps_contribution = event.damage / window_seconds;
-            sample.total_dps += dps_contribution;
-            *sample
-                .by_weapon
-                .entry(event.weapon.clone())
-                .or_insert(0.0) += dps_contribution;
-            *sample
-                .by_target
-                .entry(event.target.clone())
-                .or_insert(0.0) += dps_contribution;
+            if event.incoming {
+                sample.incoming_dps += dps_contribution;
+                *sample
+                    .incoming_by_source
+                    .entry(event.source.clone())
+                    .or_insert(0.0) += dps_contribution;
+            } else {
+                sample.outgoing_dps += dps_contribution;
+                *sample
+                    .outgoing_by_weapon
+                    .entry(event.weapon.clone())
+                    .or_insert(0.0) += dps_contribution;
+                *sample
+                    .outgoing_by_target
+                    .entry(event.target.clone())
+                    .or_insert(0.0) += dps_contribution;
+            }
         }
     }
 
     samples
 }
-

@@ -21,11 +21,14 @@ impl EngineState {
     }
 
     pub fn total_damage(&self) -> f32 {
-        self.events.iter().map(|event| event.damage).sum()
+        self.events
+            .iter()
+            .filter(|event| !event.incoming)
+            .map(|event| event.damage)
+            .sum()
     }
 
     pub fn dps_series(&self, window: Duration) -> Vec<DpsSample> {
         analysis::compute_dps_series(&self.events, window)
     }
 }
-
