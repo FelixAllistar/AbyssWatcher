@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::{mpsc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime};
 
@@ -11,6 +12,7 @@ use dioxus_desktop::{
     launch::launch_virtual_dom, use_window, use_wry_event_handler, Config, DesktopService,
     LogicalPosition, LogicalSize, WindowBuilder,
 };
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -97,6 +99,113 @@ pub struct CharacterInfo {
     pub tracked: bool,
 }
 
+struct WorkerControl {
+    stop_tx: mpsc::Sender<()>,
+    handle: Mutex<Option<thread::JoinHandle<()>>>,
+}
+
+lazy_static! {
+    static ref WORKER_CONTROL: Mutex<Option<WorkerControl>> = Mutex::new(None);
+}
+
+fn start_worker_if_needed(mut overlay_state: Signal<OverlayViewState, SyncStorage>) {
+    let mut guard = WORKER_CONTROL.lock().unwrap();
+    if guard.is_some() {
+        return;
+    }
+
+    let (stop_tx, stop_rx) = mpsc::channel();
+    let handle = thread::spawn(move || {
+        let mut engine = state::EngineState::new();
+        let mut trackers: HashMap<PathBuf, tracker::TrackedGamelog> = HashMap::new();
+        let mut events_by_path: HashMap<PathBuf, Vec<model::CombatEvent>> = HashMap::new();
+        let mut last_tracked_paths: HashSet<PathBuf> = HashSet::new();
+
+        loop {
+            if stop_rx.try_recv().is_ok() {
+                break;
+            }
+
+            let overlay_snapshot = overlay_state.read();
+            let window_secs = overlay_snapshot.dps_window_secs.max(1);
+            let window = Duration::from_secs(window_secs);
+            let tracked_characters: Vec<_> = overlay_snapshot
+                .characters
+                .iter()
+                .filter(|character| character.tracked)
+                .map(|character| (character.file_path.clone(), character.name.clone()))
+                .collect();
+            drop(overlay_snapshot);
+
+            let tracked_paths: HashSet<_> =
+                tracked_characters.iter().map(|(path, _)| path.clone()).collect();
+
+            trackers.retain(|path, _| tracked_paths.contains(path));
+            events_by_path.retain(|path, _| tracked_paths.contains(path));
+
+            for (file_path, name) in tracked_characters {
+                if !trackers.contains_key(&file_path) {
+                    if let Ok(tracker_entry) =
+                        tracker::TrackedGamelog::new(name, file_path.clone())
+                    {
+                        trackers.insert(file_path.clone(), tracker_entry);
+                    }
+                }
+                events_by_path.entry(file_path.clone()).or_default();
+            }
+
+            if tracked_paths != last_tracked_paths {
+                engine = state::EngineState::new();
+                for (path, events) in &events_by_path {
+                    if tracked_paths.contains(path) {
+                        for event in events {
+                            engine.push_event(event.clone());
+                        }
+                    }
+                }
+                last_tracked_paths = tracked_paths.clone();
+            }
+
+            for (path, tracker_entry) in trackers.iter_mut() {
+                if let Ok(new_events) = tracker_entry.read_new_events() {
+                    let entry_events = events_by_path.entry(path.clone()).or_default();
+                    for event in new_events {
+                        entry_events.push(event.clone());
+                        if last_tracked_paths.contains(path) {
+                            engine.push_event(event);
+                        }
+                    }
+                }
+            }
+
+            let dps_samples = engine.dps_series(window);
+            let total_damage = engine.total_damage();
+            overlay_state.with_mut(move |state| {
+                state.dps_samples = dps_samples;
+                state.total_damage = total_damage;
+            });
+
+            thread::sleep(Duration::from_millis(250));
+        }
+    });
+
+    *guard = Some(WorkerControl {
+        stop_tx,
+        handle: Mutex::new(Some(handle)),
+    });
+}
+
+fn shutdown_worker() {
+    let mut guard = WORKER_CONTROL.lock().unwrap();
+    if let Some(control) = guard.as_ref() {
+        let _ = control.stop_tx.send(());
+        if let Some(handle) = control.handle.lock().unwrap().take() {
+            let _ = handle.join();
+        }
+    }
+    *guard = None;
+}
+
 fn initial_overlay_state() -> OverlayViewState {
     let mut engine_state = state::EngineState::new();
 
@@ -155,58 +264,7 @@ fn App() -> Element {
     use_effect({
         let overlay_state = overlay_state.clone();
         move || {
-            thread::spawn(move || {
-                let mut overlay_state = overlay_state;
-                let mut engine = state::EngineState::new();
-                let mut trackers: HashMap<PathBuf, tracker::TrackedGamelog> = HashMap::new();
-
-                loop {
-                    let window_secs = overlay_state.read().dps_window_secs.max(1);
-                    let window = Duration::from_secs(window_secs);
-                    let tracked_characters: Vec<_> = overlay_state
-                        .read()
-                        .characters
-                        .iter()
-                        .filter(|character| character.tracked)
-                        .map(|character| (character.file_path.clone(), character.name.clone()))
-                        .collect();
-
-                    let tracked_paths: HashSet<_> = tracked_characters
-                        .iter()
-                        .map(|(path, _)| path.clone())
-                        .collect();
-
-                    trackers.retain(|path, _| tracked_paths.contains(path));
-
-                    for (file_path, name) in tracked_characters {
-                        if trackers.contains_key(&file_path) {
-                            continue;
-                        }
-                        if let Ok(tracker_entry) =
-                            tracker::TrackedGamelog::new(name, file_path.clone())
-                        {
-                            trackers.insert(file_path.clone(), tracker_entry);
-                        }
-                    }
-
-                    for tracker_entry in trackers.values_mut() {
-                        if let Ok(events) = tracker_entry.read_new_events() {
-                            for event in events {
-                                engine.push_event(event);
-                            }
-                        }
-                    }
-
-                    let dps_samples = engine.dps_series(window);
-                    let total_damage = engine.total_damage();
-                    overlay_state.with_mut(move |state| {
-                        state.dps_samples = dps_samples;
-                        state.total_damage = total_damage;
-                    });
-
-                    thread::sleep(Duration::from_millis(250));
-                }
-            });
+            start_worker_if_needed(overlay_state);
         }
     });
 
@@ -236,6 +294,7 @@ fn App() -> Element {
             } = event
             {
                 let _ = save_window_state(&desktop);
+                shutdown_worker();
                 desktop.close();
             }
         }
@@ -296,6 +355,7 @@ fn App() -> Element {
                         let desktop = desktop.clone();
                         move |_| {
                             let _ = save_window_state(&desktop);
+                            shutdown_worker();
                             desktop.close();
                         }
                     },

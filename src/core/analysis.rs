@@ -9,11 +9,12 @@ pub fn compute_dps_series(events: &[CombatEvent], window: Duration) -> Vec<DpsSa
     }
 
     let window_millis = window.as_millis().max(1) as u64;
-    let last_timestamp_millis = events
-        .last()
+    let max_timestamp_millis = events
+        .iter()
         .map(|event| event.timestamp.as_millis() as u64)
+        .max()
         .unwrap_or(0);
-    let slot_count = (last_timestamp_millis / window_millis + 1) as usize;
+    let slot_count = (max_timestamp_millis / window_millis + 1) as usize;
 
     let mut samples = Vec::with_capacity(slot_count);
     for index in 0..slot_count {
