@@ -11,14 +11,17 @@ pub struct CombatEvent {
     pub target: EntityName,
     pub weapon: WeaponName,
     pub damage: f32,
+    pub incoming: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DpsSample {
     pub time: Duration,
-    pub total_dps: f32,
-    pub by_weapon: HashMap<WeaponName, f32>,
-    pub by_target: HashMap<EntityName, f32>,
+    pub outgoing_dps: f32,
+    pub incoming_dps: f32,
+    pub outgoing_by_weapon: HashMap<WeaponName, f32>,
+    pub outgoing_by_target: HashMap<EntityName, f32>,
+    pub incoming_by_source: HashMap<EntityName, f32>,
 }
 
 #[derive(Clone, Debug)]
@@ -28,4 +31,3 @@ pub struct FightSummary {
     pub total_damage: f32,
     pub samples: Vec<DpsSample>,
 }
-

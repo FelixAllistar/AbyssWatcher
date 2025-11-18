@@ -140,9 +140,10 @@ pub fn read_full_lines(path: impl AsRef<Path>) -> io::Result<Vec<String>> {
 pub fn read_full_events(path: impl AsRef<Path>) -> io::Result<Vec<CombatEvent>> {
     let lines = read_full_lines(path)?;
     let mut events = Vec::new();
+    let mut parser = parser::LineParser::new();
 
     for line in lines {
-        if let Some(event) = parser::parse_line(&line) {
+        if let Some(event) = parser.parse_line(&line, "") {
             events.push(event);
         }
     }

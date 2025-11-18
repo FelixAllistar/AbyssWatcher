@@ -1,15 +1,19 @@
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::{mpsc, Mutex};
+use std::thread;
 use std::time::{Duration, SystemTime};
 
+use crate::core::{log_io, model, state, tracker};
 use dioxus::prelude::*;
 use dioxus_core::VirtualDom;
 use dioxus_desktop::{
     launch::launch_virtual_dom, use_window, use_wry_event_handler, Config, DesktopService,
     LogicalPosition, LogicalSize, WindowBuilder,
 };
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use crate::core::{log_io, model, state};
 
 #[derive(Serialize, Deserialize)]
 struct WindowState {
@@ -39,6 +43,9 @@ fn load_window_state_from_disk() -> WindowState {
 }
 
 fn build_window_config(window_state: &WindowState) -> Config {
+    let width = window_state.width.max(360);
+    let height = window_state.height.max(220);
+
     Config::new()
         .with_window(
             WindowBuilder::new()
@@ -46,10 +53,7 @@ fn build_window_config(window_state: &WindowState) -> Config {
                 .with_transparent(true)
                 .with_always_on_top(true)
                 .with_decorations(false)
-                .with_inner_size(LogicalSize::new(
-                    window_state.width as f64,
-                    window_state.height as f64,
-                ))
+                .with_inner_size(LogicalSize::new(width as f64, height as f64))
                 .with_position(LogicalPosition::new(
                     window_state.x as f64,
                     window_state.y as f64,
@@ -84,6 +88,7 @@ pub struct OverlayViewState {
     pub total_damage: f32,
     pub gamelog_dir: Option<PathBuf>,
     pub characters: Vec<CharacterInfo>,
+    pub dps_window_secs: u64,
 }
 
 #[derive(Clone)]
@@ -91,6 +96,114 @@ pub struct CharacterInfo {
     pub name: String,
     pub file_path: PathBuf,
     pub last_modified: SystemTime,
+    pub tracked: bool,
+}
+
+struct WorkerControl {
+    stop_tx: mpsc::Sender<()>,
+    handle: Mutex<Option<thread::JoinHandle<()>>>,
+}
+
+lazy_static! {
+    static ref WORKER_CONTROL: Mutex<Option<WorkerControl>> = Mutex::new(None);
+}
+
+fn start_worker_if_needed(mut overlay_state: Signal<OverlayViewState, SyncStorage>) {
+    let mut guard = WORKER_CONTROL.lock().unwrap();
+    if guard.is_some() {
+        return;
+    }
+
+    let (stop_tx, stop_rx) = mpsc::channel();
+    let handle = thread::spawn(move || {
+        let mut engine = state::EngineState::new();
+        let mut trackers: HashMap<PathBuf, tracker::TrackedGamelog> = HashMap::new();
+        let mut events_by_path: HashMap<PathBuf, Vec<model::CombatEvent>> = HashMap::new();
+        let mut last_tracked_paths: HashSet<PathBuf> = HashSet::new();
+
+        loop {
+            if stop_rx.try_recv().is_ok() {
+                break;
+            }
+
+            let overlay_snapshot = overlay_state.read();
+            let window_secs = overlay_snapshot.dps_window_secs.max(1);
+            let window = Duration::from_secs(window_secs);
+            let tracked_characters: Vec<_> = overlay_snapshot
+                .characters
+                .iter()
+                .filter(|character| character.tracked)
+                .map(|character| (character.file_path.clone(), character.name.clone()))
+                .collect();
+            drop(overlay_snapshot);
+
+            let tracked_paths: HashSet<_> =
+                tracked_characters.iter().map(|(path, _)| path.clone()).collect();
+
+            trackers.retain(|path, _| tracked_paths.contains(path));
+            events_by_path.retain(|path, _| tracked_paths.contains(path));
+
+            for (file_path, name) in tracked_characters {
+                if !trackers.contains_key(&file_path) {
+                    if let Ok(tracker_entry) =
+                        tracker::TrackedGamelog::new(name, file_path.clone())
+                    {
+                        trackers.insert(file_path.clone(), tracker_entry);
+                    }
+                }
+                events_by_path.entry(file_path.clone()).or_default();
+            }
+
+            if tracked_paths != last_tracked_paths {
+                engine = state::EngineState::new();
+                for (path, events) in &events_by_path {
+                    if tracked_paths.contains(path) {
+                        for event in events {
+                            engine.push_event(event.clone());
+                        }
+                    }
+                }
+                last_tracked_paths = tracked_paths.clone();
+            }
+
+            for (path, tracker_entry) in trackers.iter_mut() {
+                if let Ok(new_events) = tracker_entry.read_new_events() {
+                    let entry_events = events_by_path.entry(path.clone()).or_default();
+                    for event in new_events {
+                        entry_events.push(event.clone());
+                        if last_tracked_paths.contains(path) {
+                            engine.push_event(event);
+                        }
+                    }
+                }
+            }
+
+            let dps_samples = engine.dps_series(window);
+            let total_damage = engine.total_damage();
+            overlay_state.with_mut(move |state| {
+                state.dps_samples = dps_samples;
+                state.total_damage = total_damage;
+            });
+
+            thread::sleep(Duration::from_millis(250));
+        }
+    });
+
+    *guard = Some(WorkerControl {
+        stop_tx,
+        handle: Mutex::new(Some(handle)),
+    });
+}
+
+fn shutdown_worker() {
+    let mut guard = WORKER_CONTROL.lock().unwrap();
+    if let Some(control) = guard.as_ref() {
+        let _ = control.stop_tx.send(());
+        if let Some(handle) = control.handle.lock().unwrap().take() {
+            let _ = handle.join();
+        }
+    }
+    *guard = None;
 }
 
 fn initial_overlay_state() -> OverlayViewState {
@@ -103,6 +216,7 @@ fn initial_overlay_state() -> OverlayViewState {
             target: "Enemy".to_string(),
             weapon: "Laser".to_string(),
             damage: 100.0,
+            incoming: false,
         },
         model::CombatEvent {
             timestamp: Duration::from_secs(1),
@@ -110,6 +224,7 @@ fn initial_overlay_state() -> OverlayViewState {
             target: "Enemy".to_string(),
             weapon: "Laser".to_string(),
             damage: 120.0,
+            incoming: false,
         },
         model::CombatEvent {
             timestamp: Duration::from_secs(2),
@@ -117,6 +232,7 @@ fn initial_overlay_state() -> OverlayViewState {
             target: "Enemy".to_string(),
             weapon: "Missile".to_string(),
             damage: 300.0,
+            incoming: false,
         },
     ];
 
@@ -124,7 +240,7 @@ fn initial_overlay_state() -> OverlayViewState {
         engine_state.push_event(event);
     }
 
-    let dps_samples = engine_state.dps_series(Duration::from_secs(1));
+    let dps_samples = engine_state.dps_series(Duration::from_secs(5));
     let total_damage = engine_state.total_damage();
 
     OverlayViewState {
@@ -132,6 +248,7 @@ fn initial_overlay_state() -> OverlayViewState {
         total_damage,
         gamelog_dir: None,
         characters: Vec::new(),
+        dps_window_secs: 5,
     }
 }
 
@@ -139,18 +256,28 @@ fn initial_overlay_state() -> OverlayViewState {
 fn App() -> Element {
     let desktop = use_window();
     let persisted_state = load_window_state_from_disk();
-    let mut overlay_state = use_signal(initial_overlay_state);
+    let overlay_state: Signal<OverlayViewState, SyncStorage> =
+        use_signal_sync(initial_overlay_state);
 
     use_context_provider(|| overlay_state);
 
     use_effect({
-        let desktop = desktop.clone();
+        let overlay_state = overlay_state.clone();
         move || {
+            start_worker_if_needed(overlay_state);
+        }
+    });
+
+    use_effect({
+        let desktop = desktop.clone();
+        let persisted_state = persisted_state;
+        move || {
+            let width = persisted_state.width.max(360);
+            let height = persisted_state.height.max(220);
             let _ = desktop.window.set_always_on_top(true);
-            let _ = desktop.window.set_inner_size(LogicalSize::new(
-                persisted_state.width as f64,
-                persisted_state.height as f64,
-            ));
+            let _ = desktop
+                .window
+                .set_inner_size(LogicalSize::new(width as f64, height as f64));
             let _ = desktop.window.set_outer_position(LogicalPosition::new(
                 persisted_state.x as f64,
                 persisted_state.y as f64,
@@ -167,6 +294,7 @@ fn App() -> Element {
             } = event
             {
                 let _ = save_window_state(&desktop);
+                shutdown_worker();
                 desktop.close();
             }
         }
@@ -178,7 +306,7 @@ fn App() -> Element {
 
     let overlay_opacity = 0.8_f32;
     let container_style = format!(
-        "background: rgba(0,0,0,{}); color: white; font-family: monospace; border-radius: 8px; user-select: none;",
+        "background: rgba(0,0,0,{}); color: white; font-family: monospace; border-radius: 8px; user-select: none; min-width: 360px; min-height: 220px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 0 10px rgba(0,0,0,0.5);",
         overlay_opacity
     );
 
@@ -227,6 +355,7 @@ fn App() -> Element {
                         let desktop = desktop.clone();
                         move |_| {
                             let _ = save_window_state(&desktop);
+                            shutdown_worker();
                             desktop.close();
                         }
                     },
@@ -234,7 +363,7 @@ fn App() -> Element {
                 }
             }
             div {
-                style: "padding: 15px;",
+                style: "padding: 15px; display: flex; flex-direction: column; gap: 10px;",
                 GamelogSettings {}
                 DpsSummary {}
                 CharacterList {}
@@ -245,25 +374,104 @@ fn App() -> Element {
 
 #[component]
 fn DpsSummary() -> Element {
-    let overlay_state_signal = use_context::<Signal<OverlayViewState>>();
+    let overlay_state_signal = use_context::<Signal<OverlayViewState, SyncStorage>>();
     let overlay_state_value = overlay_state_signal();
 
-    let latest_dps = overlay_state_value
+    let (outgoing_dps, incoming_dps) = overlay_state_value
         .dps_samples
         .last()
-        .map(|sample| sample.total_dps)
-        .unwrap_or(0.0);
+        .map(|sample| (sample.outgoing_dps, sample.incoming_dps))
+        .unwrap_or((0.0, 0.0));
+
+    let latest_sample = overlay_state_value.dps_samples.last();
+
+    let mut top_outgoing_targets: Vec<(String, f32)> = Vec::new();
+    let mut top_incoming_sources: Vec<(String, f32)> = Vec::new();
+
+    if let Some(sample) = latest_sample {
+        top_outgoing_targets = sample
+            .outgoing_by_target
+            .iter()
+            .map(|(name, dps)| (name.clone(), *dps))
+            .collect();
+        top_outgoing_targets.sort_by(|a, b| b.1.total_cmp(&a.1));
+        top_outgoing_targets.truncate(3);
+
+        top_incoming_sources = sample
+            .incoming_by_source
+            .iter()
+            .map(|(name, dps)| (name.clone(), *dps))
+            .collect();
+        top_incoming_sources.sort_by(|a, b| b.1.total_cmp(&a.1));
+        top_incoming_sources.truncate(3);
+    }
+
+    let history = &overlay_state_value.dps_samples;
+    let max_points = 60usize;
+    let history_len = history.len();
+    let slice_start = history_len.saturating_sub(max_points);
+    let slice = &history[slice_start..history_len];
+
+    let mut max_dps_value = 0.0_f32;
+    for sample in slice {
+        max_dps_value = max_dps_value
+            .max(sample.outgoing_dps)
+            .max(sample.incoming_dps);
+    }
+    if max_dps_value <= 0.0 {
+        max_dps_value = 1.0;
+    }
+
+    let mut graph_points: Vec<(f32, f32)> = Vec::new();
+    for sample in slice {
+        let out_height = ((sample.outgoing_dps / max_dps_value) * 36.0).max(1.0);
+        let in_height = ((sample.incoming_dps / max_dps_value) * 36.0).max(1.0);
+        graph_points.push((out_height, in_height));
+    }
 
     rsx! {
         h2 { "DPS Meter" }
-        p { "Current DPS: {latest_dps}" }
-        p { "Total Damage: {overlay_state_value.total_damage}" }
+        p { "Outgoing DPS: {outgoing_dps}" }
+        p { "Incoming DPS: {incoming_dps}" }
+        p { "Total Outgoing Damage: {overlay_state_value.total_damage}" }
+        if !graph_points.is_empty() {
+            div {
+                style: "margin-top: 4px; font-size: 11px;",
+                p { "History:" }
+                div {
+                    style: "height: 40px; display: flex; align-items: flex-end; gap: 1px;",
+                    for (out_height_px, in_height_px) in &graph_points {
+                        div {
+                            style: "width: 3px; display: flex; flex-direction: column-reverse; align-items: stretch;",
+                            div {
+                                style: "height: {out_height_px}px; background: rgba(0, 191, 255, 0.9);"
+                            }
+                            div {
+                                style: "height: {in_height_px}px; background: rgba(255, 64, 64, 0.8);"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if !top_outgoing_targets.is_empty() {
+            p { "Top targets:" }
+            for (name, dps) in &top_outgoing_targets {
+                p { "- {name}: {dps}" }
+            }
+        }
+        if !top_incoming_sources.is_empty() {
+            p { "Top incoming:" }
+            for (name, dps) in &top_incoming_sources {
+                p { "- {name}: {dps}" }
+            }
+        }
     }
 }
 
 #[component]
 fn GamelogSettings() -> Element {
-    let mut overlay_state_signal = use_context::<Signal<OverlayViewState>>();
+    let mut overlay_state_signal = use_context::<Signal<OverlayViewState, SyncStorage>>();
     let mut path_input = use_signal(|| {
         "/home/felix/Games/eve-online/drive_c/users/felix/My Documents/EVE/logs/Gamelogs"
             .to_string()
@@ -274,12 +482,16 @@ fn GamelogSettings() -> Element {
         .as_ref()
         .map(|path| path.display().to_string())
         .unwrap_or_else(|| "(not set)".to_string());
+    let window_secs = state_snapshot.dps_window_secs;
 
     rsx! {
         div {
             style: "margin-bottom: 8px;",
             p {
                 "Gamelog folder: {folder_label}"
+            }
+            p {
+                "DPS window (seconds): {window_secs}"
             }
             div {
                 style: "margin-top: 4px;",
@@ -288,6 +500,25 @@ fn GamelogSettings() -> Element {
                     value: "{path_input()}",
                     oninput: move |event| {
                         *path_input.write() = event.value();
+                    }
+                }
+            }
+            div {
+                style: "display: flex; align-items: center; gap: 6px; margin-bottom: 4px;",
+                span { "Window (s):" }
+                input {
+                    r#type: "number",
+                    min: "1",
+                    max: "60",
+                    style: "width: 60px; font-size: 12px; padding: 2px 4px; background: #111; color: white; border: 1px solid #555; border-radius: 4px;",
+                    value: "{window_secs}",
+                    oninput: move |event| {
+                        if let Ok(parsed) = event.value().parse::<u64>() {
+                            let value = parsed.max(1).min(60);
+                            overlay_state_signal.with_mut(|state| {
+                                state.dps_window_secs = value;
+                            });
+                        }
                     }
                 }
             }
@@ -305,8 +536,10 @@ fn GamelogSettings() -> Element {
                                     name: log.character,
                                     file_path: log.path,
                                     last_modified: log.last_modified,
+                                    tracked: false,
                                 })
                                 .collect();
+                            state.characters.sort_by(|a, b| b.last_modified.cmp(&a.last_modified));
                         });
                     }
                 },
@@ -318,34 +551,68 @@ fn GamelogSettings() -> Element {
 
 #[component]
 fn CharacterList() -> Element {
-    let overlay_state_signal = use_context::<Signal<OverlayViewState>>();
+    let overlay_state_signal = use_context::<Signal<OverlayViewState, SyncStorage>>();
     let overlay_state_value = overlay_state_signal();
-
-    let items: Vec<(String, String)> = overlay_state_value
+    let characters_snapshot: Vec<(usize, String, String, String, String)> = overlay_state_value
         .characters
         .iter()
-        .map(|character| {
-            let name = character.name.clone();
+        .enumerate()
+        .map(|(idx, character)| {
             let file_name = character
                 .file_path
                 .file_name()
                 .and_then(|value| value.to_str())
                 .unwrap_or("")
                 .to_string();
-            (name, file_name)
+            let tracked_text = if character.tracked {
+                "Untrack"
+            } else {
+                "Track"
+            }
+            .to_string();
+            let button_color = if character.tracked {
+                "background: #1b5e20; color: white;"
+            } else {
+                "background: #333; color: white;"
+            }
+            .to_string();
+            (
+                idx,
+                character.name.clone(),
+                file_name,
+                tracked_text,
+                button_color,
+            )
         })
         .collect();
 
     rsx! {
         div {
-            style: "margin-top: 8px; font-size: 12px;",
-            h3 { "Detected Characters" }
+            style: "margin-top: 8px; font-size: 12px; display: flex; flex-direction: column; gap: 6px;",
+            h3 { "Characters" }
             if overlay_state_value.characters.is_empty() {
                 p { "No characters detected. Choose a gamelog folder." }
             }
-            for (name, file_name) in items {
-                div {
-                    "{name} - {file_name}"
+            div {
+                style: "max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;",
+                for (idx, name, file_name, tracked_text, button_color) in characters_snapshot {
+                    div {
+                        style: "display: flex; align-items: center; justify-content: space-between; padding: 4px 6px; background: rgba(255,255,255,0.03); border-radius: 4px;",
+                        span {
+                            "{name} - {file_name}"
+                        }
+                        button {
+                            style: "{button_color} border: 1px solid #555; border-radius: 4px; padding: 2px 6px; font-size: 12px; cursor: pointer;",
+                            onclick: move |_| {
+                                overlay_state_signal.clone().with_mut(|state| {
+                                    if let Some(entry) = state.characters.get_mut(idx) {
+                                        entry.tracked = !entry.tracked;
+                                    }
+                                });
+                            },
+                            "{tracked_text}"
+                        }
+                    }
                 }
             }
         }
