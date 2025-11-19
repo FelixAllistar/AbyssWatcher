@@ -58,3 +58,35 @@ pub fn compute_dps_series(events: &[CombatEvent], window: Duration) -> Vec<DpsSa
 
     samples
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::model::CombatEvent;
+    use super::*;
+    use std::time::Duration;
+
+    fn make_event(seconds: u64, damage: f32, incoming: bool, source: &str, target: &str) -> CombatEvent {
+        CombatEvent {
+            timestamp: Duration::from_secs(seconds),
+            source: source.to_string(),
+            target: target.to_string(),
+            weapon: "Test".to_string(),
+            damage,
+            incoming,
+        }
+    }
+
+    #[test]
+    fn keeps_slot_for_max_timestamp_even_if_unsorted() {
+        let events = vec![
+            make_event(3, 100.0, false, "Pilot", "Enemy"),
+            make_event(1, 50.0, false, "Pilot", "Enemy"),
+        ];
+
+        let samples = compute_dps_series(&events, Duration::from_secs(1));
+
+        assert_eq!(samples.len(), 4);
+        assert!(samples[3].outgoing_dps > 0.0, "latest timestamp should fill slot 3");
+        assert!(samples[1].outgoing_dps > 0.0, "middle slot should also exist");
+    }
+}
