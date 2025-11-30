@@ -28,7 +28,7 @@ impl EngineState {
             .sum()
     }
 
-    pub fn dps_series(&self, window: Duration) -> Vec<DpsSample> {
-        analysis::compute_dps_series(&self.events, window)
+    pub fn dps_series(&self, window: Duration, end: Duration) -> Vec<DpsSample> {
+        analysis::compute_dps_series(&self.events, window, end)
     }
 }

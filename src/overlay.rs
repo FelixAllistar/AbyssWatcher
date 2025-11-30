@@ -15,12 +15,17 @@ use dioxus_desktop::{
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+const DEFAULT_GAMELOG_PATH: &str =
+    "/home/felix/Games/eve-online/drive_c/users/felix/My Documents/EVE/logs/Gamelogs";
+
+#[derive(Serialize, Deserialize, Clone)]
 struct WindowState {
     width: u32,
     height: u32,
     x: i32,
     y: i32,
+    #[serde(default)]
+    tracked_files: Vec<String>,
 }
 
 fn default_window_state() -> WindowState {
@@ -29,6 +34,7 @@ fn default_window_state() -> WindowState {
         height: 200,
         x: 50,
         y: 50,
+        tracked_files: Vec::new(),
     }
 }
 
@@ -68,14 +74,25 @@ pub fn run_overlay() {
     launch_virtual_dom(VirtualDom::new(App), config);
 }
 
-fn save_window_state(desktop: &Rc<DesktopService>) -> Result<(), Box<dyn std::error::Error>> {
+fn save_window_state(
+    desktop: &Rc<DesktopService>,
+    overlay_state: &Signal<OverlayViewState, SyncStorage>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let inner_size = desktop.window.inner_size();
     let outer_position = desktop.window.outer_position().unwrap_or_default();
+    let overlay_snapshot = overlay_state.read();
+    let tracked_files: Vec<String> = overlay_snapshot
+        .characters
+        .iter()
+        .filter(|character| character.tracked)
+        .map(|character| character.file_path.display().to_string())
+        .collect();
     let state = WindowState {
         width: inner_size.width,
         height: inner_size.height,
         x: outer_position.x,
         y: outer_position.y,
+        tracked_files,
     };
     let json = serde_json::to_string(&state)?;
     std::fs::write("app_state.json", json)?;
@@ -120,6 +137,8 @@ fn start_worker_if_needed(mut overlay_state: Signal<OverlayViewState, SyncStorag
         let mut trackers: HashMap<PathBuf, tracker::TrackedGamelog> = HashMap::new();
         let mut events_by_path: HashMap<PathBuf, Vec<model::CombatEvent>> = HashMap::new();
         let mut last_tracked_paths: HashSet<PathBuf> = HashSet::new();
+        let mut last_event_timestamp: Option<Duration> = None;
+        let mut last_event_wallclock: Option<SystemTime> = None;
 
         loop {
             if stop_rx.try_recv().is_ok() {
@@ -156,12 +175,22 @@ fn start_worker_if_needed(mut overlay_state: Signal<OverlayViewState, SyncStorag
 
             if tracked_paths != last_tracked_paths {
                 engine = state::EngineState::new();
+                last_event_timestamp = None;
                 for (path, events) in &events_by_path {
                     if tracked_paths.contains(path) {
                         for event in events {
+                            last_event_timestamp = Some(match last_event_timestamp {
+                                Some(prev) => std::cmp::max(prev, event.timestamp),
+                                None => event.timestamp,
+                            });
                             engine.push_event(event.clone());
                         }
                     }
+                }
+                if last_event_timestamp.is_some() {
+                    last_event_wallclock = Some(SystemTime::now());
+                } else {
+                    last_event_wallclock = None;
                 }
                 last_tracked_paths = tracked_paths.clone();
             }
@@ -169,16 +198,36 @@ fn start_worker_if_needed(mut overlay_state: Signal<OverlayViewState, SyncStorag
             for (path, tracker_entry) in trackers.iter_mut() {
                 if let Ok(new_events) = tracker_entry.read_new_events() {
                     let entry_events = events_by_path.entry(path.clone()).or_default();
-                    for event in new_events {
-                        entry_events.push(event.clone());
-                        if last_tracked_paths.contains(path) {
-                            engine.push_event(event);
+                    if !new_events.is_empty() {
+                        let now = SystemTime::now();
+                        for event in new_events {
+                            entry_events.push(event.clone());
+                            if last_tracked_paths.contains(path) {
+                                last_event_timestamp = Some(match last_event_timestamp {
+                                    Some(prev) => std::cmp::max(prev, event.timestamp),
+                                    None => event.timestamp,
+                                });
+                                engine.push_event(event);
+                            }
                         }
+                        last_event_wallclock = Some(now);
                     }
                 }
             }
 
-            let dps_samples = engine.dps_series(window);
+            let end_time = match (last_event_timestamp, last_event_wallclock) {
+                (Some(timestamp), Some(seen_at)) => {
+                    if let Ok(elapsed) = SystemTime::now().duration_since(seen_at) {
+                        timestamp + elapsed
+                    } else {
+                        timestamp
+                    }
+                }
+                (Some(timestamp), None) => timestamp,
+                (None, _) => Duration::from_secs(0),
+            };
+
+            let dps_samples = engine.dps_series(window, end_time);
             let total_damage = engine.total_damage();
             overlay_state.with_mut(move |state| {
                 state.dps_samples = dps_samples;
@@ -240,7 +289,13 @@ fn initial_overlay_state() -> OverlayViewState {
         engine_state.push_event(event);
     }
 
-    let dps_samples = engine_state.dps_series(Duration::from_secs(5));
+    let end = engine_state
+        .events()
+        .iter()
+        .map(|event| event.timestamp)
+        .max()
+        .unwrap_or(Duration::from_secs(0));
+    let dps_samples = engine_state.dps_series(Duration::from_secs(5), end);
     let total_damage = engine_state.total_damage();
 
     OverlayViewState {
@@ -260,6 +315,37 @@ fn App() -> Element {
         use_signal_sync(initial_overlay_state);
 
     use_context_provider(|| overlay_state);
+
+    // Try to auto-scan the default gamelog folder on startup.
+    use_effect({
+        let mut overlay_state = overlay_state.clone();
+        let persisted_state = persisted_state.clone();
+        move || {
+            let default_path = PathBuf::from(DEFAULT_GAMELOG_PATH);
+            if let Ok(logs) = log_io::scan_gamelogs_dir(&default_path) {
+                if !logs.is_empty() {
+                    let tracked_set: HashSet<String> =
+                        persisted_state.tracked_files.iter().cloned().collect();
+                    overlay_state.with_mut(|state| {
+                        state.gamelog_dir = Some(default_path.clone());
+                        state.characters = logs
+                            .into_iter()
+                            .map(|log| CharacterInfo {
+                                name: log.character.clone(),
+                                file_path: log.path.clone(),
+                                last_modified: log.last_modified,
+                                tracked: tracked_set
+                                    .contains(&log.path.display().to_string()),
+                            })
+                            .collect();
+                        state
+                            .characters
+                            .sort_by(|a, b| b.last_modified.cmp(&a.last_modified));
+                    });
+                }
+            }
+        }
+    });
 
     use_effect({
         let overlay_state = overlay_state.clone();
@@ -287,13 +373,14 @@ fn App() -> Element {
 
     use_wry_event_handler({
         let desktop = desktop.clone();
+        let overlay_state = overlay_state.clone();
         move |event, _| {
             if let tao::event::Event::WindowEvent {
                 event: tao::event::WindowEvent::CloseRequested,
                 ..
             } = event
             {
-                let _ = save_window_state(&desktop);
+                let _ = save_window_state(&desktop, &overlay_state);
                 shutdown_worker();
                 desktop.close();
             }
@@ -353,8 +440,9 @@ fn App() -> Element {
                     style: "background: none; border: none; color: white; cursor: pointer; font-size: 16px;",
                     onclick: {
                         let desktop = desktop.clone();
+                        let overlay_state = overlay_state.clone();
                         move |_| {
-                            let _ = save_window_state(&desktop);
+                            let _ = save_window_state(&desktop, &overlay_state);
                             shutdown_worker();
                             desktop.close();
                         }
@@ -363,7 +451,7 @@ fn App() -> Element {
                 }
             }
             div {
-                style: "padding: 15px; display: flex; flex-direction: column; gap: 10px;",
+                style: "padding: 10px; display: flex; flex-direction: column; gap: 8px; font-size: 12px;",
                 GamelogSettings {}
                 DpsSummary {}
                 CharacterList {}
@@ -374,7 +462,7 @@ fn App() -> Element {
 
 #[component]
 fn DpsSummary() -> Element {
-    let overlay_state_signal = use_context::<Signal<OverlayViewState, SyncStorage>>();
+    let mut overlay_state_signal = use_context::<Signal<OverlayViewState, SyncStorage>>();
     let overlay_state_value = overlay_state_signal();
 
     let (outgoing_dps, incoming_dps) = overlay_state_value
@@ -429,17 +517,43 @@ fn DpsSummary() -> Element {
         graph_points.push((out_height, in_height));
     }
 
+    let window_secs = overlay_state_value.dps_window_secs;
+
     rsx! {
-        h2 { "DPS Meter" }
-        p { "Outgoing DPS: {outgoing_dps}" }
-        p { "Incoming DPS: {incoming_dps}" }
-        p { "Total Outgoing Damage: {overlay_state_value.total_damage}" }
+        div {
+            style: "display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;",
+            span { "DPS" }
+            div {
+                style: "display: flex; align-items: center; gap: 4px; font-size: 11px;",
+                span { "Window (s):" }
+                input {
+                    r#type: "number",
+                    min: "1",
+                    max: "60",
+                    style: "width: 50px; font-size: 11px; padding: 1px 3px; background: #111; color: white; border: 1px solid #555; border-radius: 3px;",
+                    value: "{window_secs}",
+                    oninput: move |event| {
+                        if let Ok(parsed) = event.value().parse::<u64>() {
+                            let value = parsed.max(1).min(60);
+                            overlay_state_signal.with_mut(|state| {
+                                state.dps_window_secs = value;
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        div {
+            style: "display: flex; flex-direction: column; gap: 2px;",
+            span { "Out: {outgoing_dps:.1} | In: {incoming_dps:.1}" }
+            span { "Total: {overlay_state_value.total_damage as i32}" }
+        }
         if !graph_points.is_empty() {
             div {
                 style: "margin-top: 4px; font-size: 11px;",
-                p { "History:" }
+                span { "History" }
                 div {
-                    style: "height: 40px; display: flex; align-items: flex-end; gap: 1px;",
+                    style: "height: 32px; display: flex; align-items: flex-end; gap: 1px;",
                     for (out_height_px, in_height_px) in &graph_points {
                         div {
                             style: "width: 3px; display: flex; flex-direction: column-reverse; align-items: stretch;",
@@ -455,15 +569,21 @@ fn DpsSummary() -> Element {
             }
         }
         if !top_outgoing_targets.is_empty() {
-            p { "Top targets:" }
+            div {
+                style: "margin-top: 4px;",
+                span { "Top targets:" }
+            }
             for (name, dps) in &top_outgoing_targets {
-                p { "- {name}: {dps}" }
+                span { "- {name}: {dps:.1}" }
             }
         }
         if !top_incoming_sources.is_empty() {
-            p { "Top incoming:" }
+            div {
+                style: "margin-top: 2px;",
+                span { "Top incoming:" }
+            }
             for (name, dps) in &top_incoming_sources {
-                p { "- {name}: {dps}" }
+                span { "- {name}: {dps:.1}" }
             }
         }
     }
@@ -472,26 +592,23 @@ fn DpsSummary() -> Element {
 #[component]
 fn GamelogSettings() -> Element {
     let mut overlay_state_signal = use_context::<Signal<OverlayViewState, SyncStorage>>();
-    let mut path_input = use_signal(|| {
-        "/home/felix/Games/eve-online/drive_c/users/felix/My Documents/EVE/logs/Gamelogs"
-            .to_string()
-    });
+    let mut path_input = use_signal(|| DEFAULT_GAMELOG_PATH.to_string());
     let state_snapshot = overlay_state_signal();
+
+    if !state_snapshot.characters.is_empty() {
+        return rsx! {  };
+    }
+
     let folder_label = state_snapshot
         .gamelog_dir
         .as_ref()
         .map(|path| path.display().to_string())
         .unwrap_or_else(|| "(not set)".to_string());
-    let window_secs = state_snapshot.dps_window_secs;
-
     rsx! {
         div {
-            style: "margin-bottom: 8px;",
+            style: "margin-bottom: 6px;",
             p {
                 "Gamelog folder: {folder_label}"
-            }
-            p {
-                "DPS window (seconds): {window_secs}"
             }
             div {
                 style: "margin-top: 4px;",
@@ -500,25 +617,6 @@ fn GamelogSettings() -> Element {
                     value: "{path_input()}",
                     oninput: move |event| {
                         *path_input.write() = event.value();
-                    }
-                }
-            }
-            div {
-                style: "display: flex; align-items: center; gap: 6px; margin-bottom: 4px;",
-                span { "Window (s):" }
-                input {
-                    r#type: "number",
-                    min: "1",
-                    max: "60",
-                    style: "width: 60px; font-size: 12px; padding: 2px 4px; background: #111; color: white; border: 1px solid #555; border-radius: 4px;",
-                    value: "{window_secs}",
-                    oninput: move |event| {
-                        if let Ok(parsed) = event.value().parse::<u64>() {
-                            let value = parsed.max(1).min(60);
-                            overlay_state_signal.with_mut(|state| {
-                                state.dps_window_secs = value;
-                            });
-                        }
                     }
                 }
             }
@@ -551,6 +649,7 @@ fn GamelogSettings() -> Element {
 
 #[component]
 fn CharacterList() -> Element {
+    let mut expanded = use_signal(|| false);
     let overlay_state_signal = use_context::<Signal<OverlayViewState, SyncStorage>>();
     let overlay_state_value = overlay_state_signal();
     let characters_snapshot: Vec<(usize, String, String, String, String)> = overlay_state_value
@@ -588,29 +687,44 @@ fn CharacterList() -> Element {
 
     rsx! {
         div {
-            style: "margin-top: 8px; font-size: 12px; display: flex; flex-direction: column; gap: 6px;",
-            h3 { "Characters" }
-            if overlay_state_value.characters.is_empty() {
-                p { "No characters detected. Choose a gamelog folder." }
-            }
+            style: "margin-top: 4px; font-size: 12px; display: flex; flex-direction: column; gap: 4px;",
             div {
-                style: "max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;",
-                for (idx, name, file_name, tracked_text, button_color) in characters_snapshot {
-                    div {
-                        style: "display: flex; align-items: center; justify-content: space-between; padding: 4px 6px; background: rgba(255,255,255,0.03); border-radius: 4px;",
-                        span {
-                            "{name} - {file_name}"
-                        }
-                        button {
-                            style: "{button_color} border: 1px solid #555; border-radius: 4px; padding: 2px 6px; font-size: 12px; cursor: pointer;",
-                            onclick: move |_| {
-                                overlay_state_signal.clone().with_mut(|state| {
-                                    if let Some(entry) = state.characters.get_mut(idx) {
-                                        entry.tracked = !entry.tracked;
-                                    }
-                                });
-                            },
-                            "{tracked_text}"
+                style: "display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 2px 4px;",
+                onclick: move |_| {
+                    expanded.with_mut(|value| *value = !*value);
+                },
+                span { "Characters" }
+                span {
+                    if expanded() {
+                        "▾"
+                    } else {
+                        "▸"
+                    }
+                }
+            }
+            if expanded() {
+                if overlay_state_value.characters.is_empty() {
+                    p { "No characters detected. Choose a gamelog folder." }
+                }
+                div {
+                    style: "max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; background: rgba(0,0,0,0.75); border-radius: 4px; padding: 2px;",
+                    for (idx, name, file_name, tracked_text, button_color) in characters_snapshot {
+                        div {
+                            style: "display: flex; align-items: center; justify-content: space-between; padding: 3px 6px; background: rgba(255,255,255,0.04); border-radius: 3px;",
+                            span {
+                                "{name} - {file_name}"
+                            }
+                            button {
+                                style: "{button_color} border: 1px solid #555; border-radius: 4px; padding: 2px 6px; font-size: 12px; cursor: pointer;",
+                                onclick: move |_| {
+                                    overlay_state_signal.clone().with_mut(|state| {
+                                        if let Some(entry) = state.characters.get_mut(idx) {
+                                            entry.tracked = !entry.tracked;
+                                        }
+                                    });
+                                },
+                                "{tracked_text}"
+                            }
                         }
                     }
                 }
