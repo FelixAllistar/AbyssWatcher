@@ -9,33 +9,33 @@ This project is a DPS (Damage Per Second) Meter for EVE Online. It reads combat 
 
 ## Architecture Overview
 
-- The crate builds a **single desktop binary** (`abyss-watcher`) with one visible Dioxus overlay window.
+- The crate builds a **single desktop binary** (`abyss-watcher`) with one visible `egui` overlay window (via `eframe`).
 - Core logic is separated from UI:
-  - `src/core/` holds **domain code** only (no Dioxus): data models, log parsing, log I/O, DPS math, and engine state.
+  - `src/core/` holds **domain code** only (no UI framework types): data models, log parsing, log I/O, DPS math, and engine state.
     - `model.rs` – combat events, DPS samples, fight summaries.
     - `parser.rs` – log line → `CombatEvent` (pure string parsing).
     - `log_io.rs` – tailing live log files and reading full historical logs.
     - `analysis.rs` – transforming events into DPS time series and aggregates.
     - `state.rs` – long-lived engine state (`EngineState`) that owns events and exposes computed views.
-  - `src/overlay.rs` holds **Dioxus UI and window management**:
+  - `src/overlay_egui.rs` holds **egui/eframe UI and window management**:
     - Creating the transparent, always-on-top, borderless window.
-    - App-wide signals/context (`OverlayViewState`) that read from the engine and drive the HUD.
-    - Drag-to-move behavior and window state persistence (size/position, and later opacity).
-- `src/main.rs` should remain minimal: wire `core` and `overlay` together and call `overlay::run_overlay()`.
+    - Owning the long-lived `EngineState`, log tailers, and a small HUD view model.
+    - Drag-to-move behavior, resize grip, and window state persistence (size/position, opacity, DPS window, tracked characters, gamelog folder).
+- `src/main.rs` should remain minimal: wire `core` and the overlay together and call `overlay_egui::run_overlay()`.
 
 ## Coding Guidelines for This Project
 
-- Keep **domain logic** (parsing, math, log reading, state) inside `core::*` modules and **never in Dioxus components**.
-- Dioxus components should:
-  - Consume already-computed values (e.g. DPS samples, totals) via signals/context.
+- Keep **domain logic** (parsing, math, log reading, state) inside `core::*` modules and **never in UI components**.
+- The overlay UI (`overlay_egui`) should:
+  - Consume already-computed values (e.g. DPS samples, totals) via `EngineState` and small view-model structs.
   - Only perform simple presentation logic, formatting, and user interaction wiring.
 - Prefer **owned strings** (`String`) and simple collections (`Vec`, `HashMap`) in the core layer for clarity and safety.
 - Use `std::time::Duration` for timestamps and time math; do not mix wall-clock time directly into DPS calculations.
 - When adding live log tailing:
  - Prefer a simple polling-based tailer using `LogTailer` in `core::log_io`.
- - Keep background tasks (threads or async loops) in `core` or a small non-UI helper, and communicate with Dioxus via signals/channels.
+ - Keep background work in `overlay_egui` or a small non-UI helper that owns `EngineState`, but never push parsing/math into the drawing code.
 - Preserve the overlay constraints:
- - Transparent background, always on top, no extra windows.
+ - Transparent/semi-transparent background, always on top, no extra windows.
  - Dragging the custom title bar moves the window; closing the window saves state and exits.
 
 ## Gamelog UX Notes
@@ -77,188 +77,6 @@ This project is a DPS (Damage Per Second) Meter for EVE Online. It reads combat 
     - Extend the parser with additional classifiers (e.g. detect `" remote armor repaired "`, `"energy neutralized"`, `"energy nosferatu"`), but keep the existing outgoing/incoming damage semantics unchanged.
     - Add new per-entity aggregates in `DpsSample` (e.g. `rep_by_target`, `neut_by_source`) rather than mixing them into DPS maps.
   - Message filtering rules should stay explicit and centralized in `core::parser`, so overlay/graph components always consume already-filtered `CombatEvent`s.
-
-## Dioxus Development Guide (from prompt.md)
-
-You are an expert [0.7 Dioxus](https://dioxuslabs.com/learn/0.7) assistant. Dioxus 0.7 changes every api in dioxus. Only use this up to date documentation. `cx`, `Scope`, and `use_state` are gone
-
-Provide concise code examples with detailed descriptions
-
-# Dioxus Dependency
-
-You can add Dioxus to your `Cargo.toml` like this:
-
-```toml
-[dependencies]
-dioxus = { version = "0.7.0-rc.1" }
-
-[features]
-default = ["web", "webview", "server"]
-web = ["dioxus/web"]
-webview = ["dioxus/desktop"]
-server = ["dioxus/server"]
-```
-
-# Launching your application
-
-You need to create a main function that sets up the Dioxus runtime and mounts your root component.
-
-```rust
-use dioxus::prelude::*;
-
-fn main() {
-	dioxus::launch(App);
-}
-
-#[component]
-fn App() -> Element {
-	rsx! { "Hello, Dioxus!" }
-}
-```
-
-Then serve with `dx serve`:
-
-```sh
-curl -sSL http://dioxus.dev/install.sh | sh
-dx serve
-```
-
-# UI with RSX
-
-```rust
-rsx! {
-	div {
-		class: "container", // Attribute
-		color: "red", // Inline styles
-		width: if condition { "100%" }, // Conditional attributes
-		"Hello, Dioxus!"
-	}
-	// Prefer loops over iterators
-	for i in 0..5 {
-		div { "{i}" } // use elements or components directly in loops
-	}
-	if condition {
-		div { "Condition is true!" } // use elements or components directly in conditionals
-	}
-
-	{children} // Expressions are wrapped in brace
-	{(0..5).map(|i| rsx! { span { "Item {i}" } })} // Iterators must be wrapped in braces
-}
-```
-
-# Assets
-
-The asset macro can be used to link to local files to use in your project. All links start with `/` and are relative to the root of your project.
-
-```rust
-rsx! {
-	img {
-		src: asset!("/assets/image.png"),
-		alt: "An image",
-	}
-}
-```
-
-## Styles
-
-The `document::Stylesheet` component will inject the stylesheet into the `<head>` of the document
-
-```rust
-rsx! {
-	document::Stylesheet {
-		href: asset!("/assets/styles.css"),
-	}
-}
-```
-
-# Components
-
-Components are the building blocks of apps
-
-* Component are functions annotated with the `#[component]` macro.
-* The function name must start with a capital letter or contain an underscore.
-* A component re-renders only under two conditions:
-	1.  Its props change (as determined by `PartialEq`).
-	2.  An internal reactive state it depends on is updated.
-
-```rust
-#[component]
-fn Input(mut value: Signal<String>) -> Element {
-	rsx! {
-		input {
-            value,
-			oninput: move |e| {
-				*value.write() = e.value();
-			},
-			onkeydown: move |e| {
-				if e.key() == Key::Enter {
-					value.write().clear();
-				}
-			},
-		}
-	}
-}
-```
-
-Each component accepts function arguments (props)
-
-* Props must be owned values, not references. Use `String` and `Vec<T>` instead of `&str` or `&[T]`.
-* Props must implement `PartialEq` and `Clone`.
-* To make props reactive and copy, you can wrap the type in `ReadOnlySignal`. Any reactive state like memos and resources that read `ReadOnlySignal` props will automatically re-run when the prop changes.
-
-# State
-
-A signal is a wrapper around a value that automatically tracks where it's read and written. Changing a signal's value causes code that relies on the signal to rerun.
-
-## Local State
-
-The `use_signal` hook creates state that is local to a single component. You can call the signal like a function (e.g. `my_signal()`) to clone the value, or use `.read()` to get a reference. `.write()` gets a mutable reference to the value.
-
-Use `use_memo` to create a memoized value that recalculates when its dependencies change. Memos are useful for expensive calculations that you don't want to repeat unnecessarily.
-
-```rust
-#[component]
-fn Counter() -> Element {
-	let mut count = use_signal(|| 0);
-	let mut doubled = use_memo(move || count() * 2); // doubled will re-run when count changes because it reads the signal
-
-	rsx! {
-		h1 { "Count: {count}" } // Counter will re-render when count changes because it reads the signal
-		h2 { "Doubled: {doubled}" }
-		button {
-			onclick: move |_| *count.write() += 1, // Writing to the signal rerenders Counter
-			"Increment"
-		}
-		button {
-			onclick: move |_| count.with_mut(|count| *count += 1), // use with_mut to mutate the signal
-			"Increment with with_mut"
-		}
-	}
-}
-```
-
-## Context API
-
-The Context API allows you to share state down the component tree. A parent provides the state using `use_context_provider`, and any child can access it with `use_context`
-
-```rust
-#[component]
-fn App() -> Element {
-	let mut theme = use_signal(|| "light".to_string());
-	use_context_provider(|| theme); // Provide a type to children
-	rsx! { Child {} }
-}
-
-#[component]
-fn Child() -> Element {
-	let theme = use_context::<Signal<String>>(); // Consume the same type
-	rsx! {
-		div {
-			"Current theme: {theme}"
-		}
-	}
-}
-```
 
 # Async
 
@@ -312,16 +130,6 @@ fn App() -> Element {
 }
 ```
 
-```toml
-dioxus = { version = "0.7.0-rc.1", features = ["router"] }
-```
-
-# Fullstack
-
-Fullstack enables server rendering and ipc calls. It uses Cargo features (`server` and a client feature like `web`) to split the code into a server and client binaries.
-
-```toml
-dioxus = { version = "0.7.0-rc.1", features = ["fullstack"] }
 ```
 
 ## Server Functions

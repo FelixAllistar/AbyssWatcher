@@ -22,13 +22,24 @@ pub fn compute_dps_series(
         .unwrap_or(0);
     let end_millis = end.as_millis() as u64;
     let max_millis = std::cmp::max(max_event_timestamp_millis, end_millis);
-    let slot_count = (max_millis / step_millis + 1) as usize;
+
+    // Keep at most this much history in the DPS series.
+    // This bounds the amount of work we do per update even in long sessions.
+    const HISTORY_MILLIS: u64 = 60_000;
+
+    let (start_millis, slot_count) = if max_millis <= HISTORY_MILLIS {
+        (0, (max_millis / step_millis + 1) as usize)
+    } else {
+        let start = max_millis - HISTORY_MILLIS;
+        let slots = (HISTORY_MILLIS / step_millis + 1) as usize;
+        (start, slots)
+    };
 
     let window_seconds = window.as_secs_f32().max(f32::EPSILON);
 
     let mut samples = Vec::with_capacity(slot_count);
     for index in 0..slot_count {
-        let time = Duration::from_millis(index as u64 * step_millis);
+        let time = Duration::from_millis(start_millis + index as u64 * step_millis);
         samples.push(DpsSample {
             time,
             outgoing_dps: 0.0,
@@ -38,9 +49,6 @@ pub fn compute_dps_series(
             incoming_by_source: HashMap::<EntityName, f32>::new(),
         });
     }
-
-    let mut events_sorted: Vec<&CombatEvent> = events.iter().collect();
-    events_sorted.sort_by_key(|event| event.timestamp.as_millis() as u64);
 
     let mut start_idx: usize = 0;
     let mut end_idx: usize = 0;
@@ -52,13 +60,13 @@ pub fn compute_dps_series(
     let mut incoming_by_source_damage: HashMap<EntityName, f32> = HashMap::new();
 
     for (i, sample) in samples.iter_mut().enumerate() {
-        let center_millis = i as u64 * step_millis;
+        let center_millis = start_millis + i as u64 * step_millis;
         let window_start_millis = center_millis.saturating_sub(window_millis);
 
-        while end_idx < events_sorted.len()
-            && events_sorted[end_idx].timestamp.as_millis() as u64 <= center_millis
+        while end_idx < events.len()
+            && events[end_idx].timestamp.as_millis() as u64 <= center_millis
         {
-            let event = events_sorted[end_idx];
+            let event = &events[end_idx];
             if event.incoming {
                 incoming_sum += event.damage;
                 *incoming_by_source_damage
@@ -77,9 +85,9 @@ pub fn compute_dps_series(
         }
 
         while start_idx < end_idx
-            && (events_sorted[start_idx].timestamp.as_millis() as u64) < window_start_millis
+            && (events[start_idx].timestamp.as_millis() as u64) < window_start_millis
         {
-            let event = events_sorted[start_idx];
+            let event = &events[start_idx];
             if event.incoming {
                 incoming_sum -= event.damage;
                 if let Some(value) = incoming_by_source_damage.get_mut(&event.source) {
@@ -145,10 +153,11 @@ mod tests {
 
     #[test]
     fn keeps_slot_for_max_timestamp_even_if_unsorted() {
-        let events = vec![
+        let mut events = vec![
             make_event(3, 100.0, false, "Pilot", "Enemy"),
             make_event(1, 50.0, false, "Pilot", "Enemy"),
         ];
+        events.sort_by_key(|event| event.timestamp.as_millis());
 
         let samples = compute_dps_series(
             &events,
