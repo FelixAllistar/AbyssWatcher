@@ -386,14 +386,9 @@ impl AbyssWatcherApp {
                             .collect();
                         entries.sort_by(|a, b| b.1.total_cmp(&a.1));
 
-                        egui::ScrollArea::vertical()
-                            .id_source("top_targets_scroll")
-                            .max_height(120.0)
-                            .show(ui, |ui| {
-                                for (name, dps) in entries {
-                                    ui.label(format!("{name}: {dps:.1}"));
-                                }
-                            });
+                        for (name, dps) in entries {
+                            ui.label(format!("{name}: {dps:.1}"));
+                        }
                     }
                 });
 
@@ -411,14 +406,9 @@ impl AbyssWatcherApp {
                             .collect();
                         entries.sort_by(|a, b| b.1.total_cmp(&a.1));
 
-                        egui::ScrollArea::vertical()
-                            .id_source("top_incoming_scroll")
-                            .max_height(120.0)
-                            .show(ui, |ui| {
-                                for (name, dps) in entries {
-                                    ui.label(format!("{name}: {dps:.1}"));
-                                }
-                            });
+                        for (name, dps) in entries {
+                            ui.label(format!("{name}: {dps:.1}"));
+                        }
                     }
                 });
             });
