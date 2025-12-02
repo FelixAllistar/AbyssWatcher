@@ -140,7 +140,13 @@ mod tests {
     use super::*;
     use std::time::Duration;
 
-    fn make_event(seconds: u64, damage: f32, incoming: bool, source: &str, target: &str) -> CombatEvent {
+    fn make_event(
+        seconds: u64,
+        damage: f32,
+        incoming: bool,
+        source: &str,
+        target: &str,
+    ) -> CombatEvent {
         CombatEvent {
             timestamp: Duration::from_secs(seconds),
             source: source.to_string(),
@@ -159,14 +165,16 @@ mod tests {
         ];
         events.sort_by_key(|event| event.timestamp.as_millis());
 
-        let samples = compute_dps_series(
-            &events,
-            Duration::from_secs(1),
-            Duration::from_secs(3),
-        );
+        let samples = compute_dps_series(&events, Duration::from_secs(1), Duration::from_secs(3));
 
         assert_eq!(samples.len(), 4);
-        assert!(samples[3].outgoing_dps > 0.0, "latest timestamp should fill slot 3");
-        assert!(samples[1].outgoing_dps > 0.0, "middle slot should also exist");
+        assert!(
+            samples[3].outgoing_dps > 0.0,
+            "latest timestamp should fill slot 3"
+        );
+        assert!(
+            samples[1].outgoing_dps > 0.0,
+            "middle slot should also exist"
+        );
     }
 }

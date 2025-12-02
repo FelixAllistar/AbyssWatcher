@@ -61,10 +61,7 @@ fn save_persisted_state(app: &AbyssWatcherApp, viewport_rect: Option<egui::Rect>
 
     state.opacity = app.opacity;
     state.dps_window_secs = app.dps_window_secs;
-    state.gamelog_dir = app
-        .gamelog_dir
-        .as_ref()
-        .map(|p| p.display().to_string());
+    state.gamelog_dir = app.gamelog_dir.as_ref().map(|p| p.display().to_string());
     state.tracked_files = app
         .characters
         .iter()
@@ -80,7 +77,7 @@ fn save_persisted_state(app: &AbyssWatcherApp, viewport_rect: Option<egui::Rect>
 pub fn run_overlay() {
     let persisted = load_persisted_state();
     let mut viewport_builder = egui::ViewportBuilder::default()
-        .with_decorations(false)
+        .with_decorations(true)
         .with_always_on_top()
         .with_inner_size(egui::vec2(
             persisted.width.max(260.0),
@@ -89,8 +86,7 @@ pub fn run_overlay() {
         .with_transparent(true);
 
     if persisted.has_position {
-        viewport_builder =
-            viewport_builder.with_position(egui::pos2(persisted.x, persisted.y));
+        viewport_builder = viewport_builder.with_position(egui::pos2(persisted.x, persisted.y));
     }
 
     let options = NativeOptions {
@@ -179,8 +175,7 @@ impl AbyssWatcherApp {
                         name: log.character.clone(),
                         file_path: log.path.clone(),
                         last_modified: log.last_modified,
-                        tracked: tracked_set
-                            .contains(&log.path.display().to_string()),
+                        tracked: tracked_set.contains(&log.path.display().to_string()),
                     })
                     .collect();
                 self.characters
@@ -206,8 +201,7 @@ impl AbyssWatcherApp {
             .collect();
 
         // Drop trackers and events for untracked paths
-        self.trackers
-            .retain(|path, _| tracked_paths.contains(path));
+        self.trackers.retain(|path, _| tracked_paths.contains(path));
         self.events_by_path
             .retain(|path, _| tracked_paths.contains(path));
 
@@ -217,10 +211,9 @@ impl AbyssWatcherApp {
                 continue;
             }
             if !self.trackers.contains_key(&entry.file_path) {
-                if let Ok(tr) = tracker::TrackedGamelog::new(
-                    entry.name.clone(),
-                    entry.file_path.clone(),
-                ) {
+                if let Ok(tr) =
+                    tracker::TrackedGamelog::new(entry.name.clone(), entry.file_path.clone())
+                {
                     self.trackers.insert(entry.file_path.clone(), tr);
                 }
             }
@@ -422,40 +415,6 @@ impl AbyssWatcherApp {
             }
         }
     }
-
-    fn draw_characters(&mut self, ui: &mut egui::Ui) {
-        egui::CollapsingHeader::new("Characters")
-            .default_open(false)
-            .show(ui, |ui| {
-                if self.characters.is_empty() {
-                    ui.label("No characters detected. Choose a gamelog folder.");
-                    return;
-                }
-
-                egui::ScrollArea::vertical()
-                    .max_height(160.0)
-                    .show(ui, |ui| {
-                        for entry in &mut self.characters {
-                            ui.horizontal(|ui| {
-                                let file_name = entry
-                                    .file_path
-                                    .file_name()
-                                    .and_then(|v| v.to_str())
-                                    .unwrap_or("");
-                                ui.label(format!("{} - {}", entry.name, file_name));
-
-                                let label = if entry.tracked { "Untrack" } else { "Track" };
-                                if ui.button(label).clicked() {
-                                    entry.tracked = !entry.tracked;
-                                    // Force immediate recompute next frame
-                                    self.last_update =
-                                        Instant::now() - Duration::from_millis(250);
-                                }
-                            });
-                        }
-                    });
-            });
-    }
 }
 
 impl eframe::App for AbyssWatcherApp {
@@ -465,8 +424,8 @@ impl eframe::App for AbyssWatcherApp {
             (vp.outer_rect, vp.inner_rect, vp.close_requested())
         });
 
-        // Title bar with drag area and opacity control
-        egui::TopBottomPanel::top("title_bar")
+        // Custom menu bar (window title is handled by native decorations)
+        egui::TopBottomPanel::top("menu_bar")
             .frame(
                 egui::Frame::none().fill(egui::Color32::from_rgba_unmultiplied(
                     0,
@@ -476,30 +435,37 @@ impl eframe::App for AbyssWatcherApp {
                 )),
             )
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label("AbyssWatcher DPS Meter");
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                egui::menu::bar(ui, |ui| {
+                    ui.menu_button("View", |ui| {
+                        ui.label("Opacity");
                         ui.add(
-                            egui::Slider::new(&mut self.opacity, 0.2..=1.0)
-                                .text("Opacity")
-                                .clamp_to_range(true),
+                            egui::Slider::new(&mut self.opacity, 0.2..=1.0).clamp_to_range(true),
                         );
                     });
-                });
 
-                let drag_id = ui.make_persistent_id("window_drag_area");
-                let rect = ui.max_rect();
-                // Only use the left portion of the title bar as a drag area
-                // so the opacity slider remains fully interactive.
-                let drag_rect = egui::Rect::from_min_max(
-                    rect.left_top(),
-                    egui::pos2(rect.left() + rect.width() * 0.6, rect.bottom()),
-                );
-                let response =
-                    ui.interact(drag_rect, drag_id, egui::Sense::click_and_drag());
-                if response.drag_started() {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
-                }
+                    ui.menu_button("Characters", |ui| {
+                        if self.characters.is_empty() {
+                            ui.label("No characters detected");
+                        } else {
+                            for entry in &mut self.characters {
+                                let label = format!(
+                                    "{} ({})",
+                                    entry.name,
+                                    entry
+                                        .file_path
+                                        .file_name()
+                                        .and_then(|v| v.to_str())
+                                        .unwrap_or_default()
+                                );
+                                let mut tracked = entry.tracked;
+                                if ui.checkbox(&mut tracked, label).changed() {
+                                    entry.tracked = tracked;
+                                    self.last_update = Instant::now() - Duration::from_millis(250);
+                                }
+                            }
+                        }
+                    });
+                });
             });
 
         // Main content panel with semi-transparent background
@@ -516,49 +482,6 @@ impl eframe::App for AbyssWatcherApp {
                 ui.vertical(|ui| {
                     self.draw_dps(ui);
                     self.draw_gamelog_settings(ui);
-                    self.draw_characters(ui);
-                    // Resize grip in the bottom-right corner
-                    let rect = ui.max_rect();
-                    let grip_size = egui::vec2(14.0, 14.0);
-                    let grip_rect = egui::Rect::from_min_max(
-                        rect.right_bottom() - grip_size,
-                        rect.right_bottom(),
-                    );
-                    let grip_id = ui.make_persistent_id("resize_grip");
-                    let response =
-                        ui.interact(grip_rect, grip_id, egui::Sense::drag());
-
-                    let painter = ui.painter();
-                    let stroke =
-                        egui::Stroke::new(1.0, egui::Color32::from_gray(180));
-                    painter.line_segment(
-                        [grip_rect.left_bottom(), grip_rect.right_top()],
-                        stroke,
-                    );
-                    painter.line_segment(
-                        [
-                            egui::pos2(grip_rect.right() - 6.0, grip_rect.bottom()),
-                            egui::pos2(grip_rect.right(), grip_rect.bottom() - 6.0),
-                        ],
-                        stroke,
-                    );
-
-                    if response.dragged() {
-                        let delta = response.drag_delta();
-                        let current_size = ctx.input(|i| {
-                            i.viewport()
-                                .inner_rect
-                                .map(|r| r.size())
-                                .unwrap_or_else(|| egui::vec2(420.0, 260.0))
-                        });
-                        let new_size = egui::vec2(
-                            (current_size.x + delta.x).max(260.0),
-                            (current_size.y + delta.y).max(180.0),
-                        );
-                        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(
-                            new_size,
-                        ));
-                    }
                 });
             });
 

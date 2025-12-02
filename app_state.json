@@ -1,13 +1,13 @@
 {
   "width": 420.0,
   "height": 260.0,
-  "x": 1291.0,
-  "y": 196.0,
+  "x": 1961.0,
+  "y": 314.0,
   "has_position": true,
-  "opacity": 0.48,
-  "dps_window_secs": 14,
+  "opacity": 0.2,
+  "dps_window_secs": 8,
   "gamelog_dir": "/home/felix/Games/eve-online/drive_c/users/felix/My Documents/EVE/logs/Gamelogs",
   "tracked_files": [
-    "/home/felix/Games/eve-online/drive_c/users/felix/My Documents/EVE/logs/Gamelogs/20251201_035737_2114264203.txt"
+    "/home/felix/Games/eve-online/drive_c/users/felix/My Documents/EVE/logs/Gamelogs/20251201_235518_2114264203.txt"
   ]
 }

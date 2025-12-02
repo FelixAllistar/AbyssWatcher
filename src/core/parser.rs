@@ -145,11 +145,7 @@ fn split_entities_and_weapon(
                 return None;
             }
 
-            Some((
-                listener.to_string(),
-                target.to_string(),
-                weapon.to_string(),
-            ))
+            Some((listener.to_string(), target.to_string(), weapon.to_string()))
         }
         DamageDirection::Incoming => {
             let mut text = trimmed;
@@ -165,11 +161,7 @@ fn split_entities_and_weapon(
                 return None;
             }
 
-            Some((
-                source.to_string(),
-                listener.to_string(),
-                weapon.to_string(),
-            ))
+            Some((source.to_string(), listener.to_string(), weapon.to_string()))
         }
     }
 }
