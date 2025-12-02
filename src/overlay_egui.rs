@@ -289,14 +289,19 @@ impl AbyssWatcherApp {
     fn draw_dps(&mut self, ui: &mut egui::Ui) {
         self.poll_engine();
 
-        let (out_dps, in_dps) = self
-            .dps_samples
-            .last()
-            .map(|s| (s.outgoing_dps, s.incoming_dps))
-            .unwrap_or((0.0, 0.0));
-
         ui.horizontal(|ui| {
-            ui.label("DPS");
+            let (out_dps, in_dps) = self
+                .dps_samples
+                .last()
+                .map(|s| (s.outgoing_dps, s.incoming_dps))
+                .unwrap_or((0.0, 0.0));
+
+            ui.label("DPS:");
+            ui.separator();
+            ui.label(format!("Out: {:.1}", out_dps));
+            ui.label(format!("In: {:.1}", in_dps));
+            ui.label(format!("Total: {:.0}", self.total_damage));
+
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let mut value = self.dps_window_secs as f64;
                 ui.add(
@@ -309,9 +314,6 @@ impl AbyssWatcherApp {
                 self.dps_window_secs = value.round().clamp(1.0, 60.0) as u64;
             });
         });
-
-        ui.label(format!("Out: {:.1} | In: {:.1}", out_dps, in_dps));
-        ui.label(format!("Total: {:.0}", self.total_damage));
 
         // DPS history chart using egui::plot
         if !self.dps_samples.is_empty() {
@@ -355,8 +357,11 @@ impl AbyssWatcherApp {
             ui.add_space(4.0);
             Plot::new("dps_history")
                 .height(140.0)
+                .set_margin_fraction(egui::vec2(0.0, 0.0))
+                .allow_drag(false)
                 .allow_boxed_zoom(false)
                 .allow_scroll(false)
+                .allow_zoom(false)
                 .include_y(0.0)
                 .include_y(self.display_max_dps as f64)
                 .show(ui, |plot_ui| {
@@ -382,6 +387,7 @@ impl AbyssWatcherApp {
                         entries.sort_by(|a, b| b.1.total_cmp(&a.1));
 
                         egui::ScrollArea::vertical()
+                            .id_source("top_targets_scroll")
                             .max_height(120.0)
                             .show(ui, |ui| {
                                 for (name, dps) in entries {
@@ -406,6 +412,7 @@ impl AbyssWatcherApp {
                         entries.sort_by(|a, b| b.1.total_cmp(&a.1));
 
                         egui::ScrollArea::vertical()
+                            .id_source("top_incoming_scroll")
                             .max_height(120.0)
                             .show(ui, |ui| {
                                 for (name, dps) in entries {
@@ -508,10 +515,14 @@ impl eframe::App for AbyssWatcherApp {
                 )),
             )
             .show(ctx, |ui| {
-                ui.vertical(|ui| {
-                    self.draw_dps(ui);
-                    self.draw_gamelog_settings(ui);
-                });
+                egui::ScrollArea::vertical()
+                    .id_source("main_scroll")
+                    .show(ui, |ui| {
+                        ui.vertical(|ui| {
+                            self.draw_dps(ui);
+                            self.draw_gamelog_settings(ui);
+                        });
+                    });
             });
 
         ctx.request_repaint_after(Duration::from_millis(100));

@@ -1,10 +1,10 @@
 {
-  "width": 327.0,
-  "height": 258.0,
-  "x": 1962.0,
-  "y": 313.0,
+  "width": 377.0,
+  "height": 286.0,
+  "x": 1955.0,
+  "y": 306.0,
   "has_position": true,
-  "opacity": 0.2,
+  "opacity": 1.0,
   "dps_window_secs": 8,
   "gamelog_dir": "/home/felix/Games/eve-online/drive_c/users/felix/My Documents/EVE/logs/Gamelogs",
   "tracked_files": [
