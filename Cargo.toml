@@ -15,6 +15,7 @@ regex = "1.5.5"
   tokio = { version = "1.0", features = ["full"] }
   tao = "0.34"
 eframe = { version = "0.27", default-features = true }
+egui_plot = "0.27.2"
 
 
 

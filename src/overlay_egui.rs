@@ -5,6 +5,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use crate::core::{log_io, model, state, tracker};
 use eframe::{egui, NativeOptions};
+use egui_plot::{Line, Plot, PlotPoints};
 use serde::{Deserialize, Serialize};
 
 const DEFAULT_GAMELOG_PATH: &str =
@@ -123,6 +124,7 @@ struct AbyssWatcherApp {
     dps_window_secs: u64,
     dps_samples: Vec<model::DpsSample>,
     total_damage: f32,
+    display_max_dps: f32,
 
     last_update: Instant,
     opacity: f32,
@@ -146,6 +148,7 @@ impl AbyssWatcherApp {
             dps_window_secs: persisted.dps_window_secs.max(1),
             dps_samples: Vec::new(),
             total_damage: 0.0,
+            display_max_dps: 0.0,
             last_update: Instant::now(),
             opacity: persisted.opacity,
         };
@@ -310,82 +313,108 @@ impl AbyssWatcherApp {
         ui.label(format!("Out: {:.1} | In: {:.1}", out_dps, in_dps));
         ui.label(format!("Total: {:.0}", self.total_damage));
 
-        // Simple history bar.
+        // DPS history chart using egui::plot
         if !self.dps_samples.is_empty() {
-            let max_points = 60usize;
+            let max_points = 120usize;
             let len = self.dps_samples.len();
             let start = len.saturating_sub(max_points);
             let slice = &self.dps_samples[start..];
 
             let mut max_val = 0.0_f32;
-            for s in slice {
-                max_val = max_val.max(s.outgoing_dps).max(s.incoming_dps);
+            let mut out_points = Vec::with_capacity(slice.len());
+            let mut in_points = Vec::with_capacity(slice.len());
+
+            for sample in slice {
+                let t = sample.time.as_secs_f64();
+                out_points.push([t, sample.outgoing_dps as f64]);
+                in_points.push([t, sample.incoming_dps as f64]);
+                max_val = max_val.max(sample.outgoing_dps).max(sample.incoming_dps);
             }
-            if max_val <= 0.0 {
-                max_val = 1.0;
+
+            let target_max = max_val.max(10.0);
+            if self.display_max_dps <= 0.0 {
+                self.display_max_dps = target_max;
+            } else {
+                // Smoothly approach the new max to avoid jumpy zooming.
+                let lerp_up = 0.2;
+                let lerp_down = 0.05;
+                if target_max > self.display_max_dps {
+                    self.display_max_dps += (target_max - self.display_max_dps) * lerp_up;
+                } else {
+                    self.display_max_dps += (target_max - self.display_max_dps) * lerp_down;
+                }
             }
+
+            let out_line = Line::new(PlotPoints::from(out_points))
+                .name("Outgoing DPS")
+                .color(egui::Color32::from_rgb(0, 191, 255));
+            let in_line = Line::new(PlotPoints::from(in_points))
+                .name("Incoming DPS")
+                .color(egui::Color32::from_rgb(255, 64, 64));
 
             ui.add_space(4.0);
-            ui.label("History:");
-            let desired_size = egui::vec2(ui.available_width(), 40.0);
-            let (rect, _response) = ui.allocate_exact_size(desired_size, egui::Sense::hover());
-            let painter = ui.painter_at(rect);
-
-            let bar_width = rect.width() / slice.len().max(1) as f32;
-            for (i, sample) in slice.iter().enumerate() {
-                let x0 = rect.left() + i as f32 * bar_width;
-                let x1 = x0 + bar_width * 0.5;
-
-                let out_h = (sample.outgoing_dps / max_val) * rect.height();
-                let in_h = (sample.incoming_dps / max_val) * rect.height();
-
-                let out_rect = egui::Rect::from_min_max(
-                    egui::pos2(x0, rect.bottom() - out_h),
-                    egui::pos2(x0 + bar_width * 0.4, rect.bottom()),
-                );
-                let in_rect = egui::Rect::from_min_max(
-                    egui::pos2(x1, rect.bottom() - in_h),
-                    egui::pos2(x1 + bar_width * 0.4, rect.bottom()),
-                );
-
-                painter.rect_filled(out_rect, 0.0, egui::Color32::from_rgb(0, 191, 255));
-                painter.rect_filled(in_rect, 0.0, egui::Color32::from_rgb(255, 64, 64));
-            }
+            Plot::new("dps_history")
+                .height(140.0)
+                .allow_boxed_zoom(false)
+                .allow_scroll(false)
+                .include_y(0.0)
+                .include_y(self.display_max_dps as f64)
+                .show(ui, |plot_ui| {
+                    plot_ui.line(out_line);
+                    plot_ui.line(in_line);
+                });
         }
 
-        // Top targets / incoming from latest sample
+        // Detailed targets / incoming lists based on latest sample
         if let Some(sample) = self.dps_samples.last() {
-            let mut top_targets: Vec<_> = sample
-                .outgoing_by_target
-                .iter()
-                .map(|(name, dps)| (name.clone(), *dps))
-                .collect();
-            top_targets.sort_by(|a, b| b.1.total_cmp(&a.1));
-            top_targets.truncate(3);
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.label("Top targets");
+                    if sample.outgoing_by_target.is_empty() {
+                        ui.label("None");
+                    } else {
+                        let mut entries: Vec<_> = sample
+                            .outgoing_by_target
+                            .iter()
+                            .map(|(name, dps)| (name.as_str(), *dps))
+                            .collect();
+                        entries.sort_by(|a, b| b.1.total_cmp(&a.1));
 
-            let mut top_incoming: Vec<_> = sample
-                .incoming_by_source
-                .iter()
-                .map(|(name, dps)| (name.clone(), *dps))
-                .collect();
-            top_incoming.sort_by(|a, b| b.1.total_cmp(&a.1));
-            top_incoming.truncate(3);
+                        egui::ScrollArea::vertical()
+                            .max_height(120.0)
+                            .show(ui, |ui| {
+                                for (name, dps) in entries {
+                                    ui.label(format!("{name}: {dps:.1}"));
+                                }
+                            });
+                    }
+                });
 
-            if !top_targets.is_empty() {
-                ui.add_space(4.0);
-                ui.label("Top targets:");
-                for (name, dps) in top_targets {
-                    ui.label(format!("- {}: {:.1}", name, dps));
-                }
-            }
+                ui.separator();
 
-            if !top_incoming.is_empty() {
-                ui.add_space(2.0);
-                ui.label("Top incoming:");
-                for (name, dps) in top_incoming {
-                    ui.label(format!("- {}: {:.1}", name, dps));
-                }
-            }
+                ui.vertical(|ui| {
+                    ui.label("Top incoming");
+                    if sample.incoming_by_source.is_empty() {
+                        ui.label("None");
+                    } else {
+                        let mut entries: Vec<_> = sample
+                            .incoming_by_source
+                            .iter()
+                            .map(|(name, dps)| (name.as_str(), *dps))
+                            .collect();
+                        entries.sort_by(|a, b| b.1.total_cmp(&a.1));
+
+                        egui::ScrollArea::vertical()
+                            .max_height(120.0)
+                            .show(ui, |ui| {
+                                for (name, dps) in entries {
+                                    ui.label(format!("{name}: {dps:.1}"));
+                                }
+                            });
+                    }
+                });
+            });
         }
     }
 
