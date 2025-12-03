@@ -5,7 +5,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use crate::core::{log_io, model, state, tracker};
 use eframe::{egui, NativeOptions};
-use egui_plot::{Line, Plot, PlotPoints};
+use egui_plot::{Line, Plot, PlotBounds, PlotPoint, PlotPoints};
 use serde::{Deserialize, Serialize};
 
 const DEFAULT_GAMELOG_PATH: &str =
@@ -123,8 +123,9 @@ struct AbyssWatcherApp {
 
     dps_window_secs: u64,
     dps_samples: Vec<model::DpsSample>,
-    total_damage: f32,
     display_max_dps: f32,
+    peak_out_dps: f32,
+    peak_in_dps: f32,
 
     last_update: Instant,
     opacity: f32,
@@ -147,8 +148,9 @@ impl AbyssWatcherApp {
             last_event_wallclock: None,
             dps_window_secs: persisted.dps_window_secs.max(1),
             dps_samples: Vec::new(),
-            total_damage: 0.0,
             display_max_dps: 0.0,
+            peak_out_dps: 0.0,
+            peak_in_dps: 0.0,
             last_update: Instant::now(),
             opacity: persisted.opacity,
         };
@@ -283,36 +285,40 @@ impl AbyssWatcherApp {
         };
 
         self.dps_samples = self.engine.dps_series(window, end_time);
-        self.total_damage = self.engine.total_damage();
     }
 
     fn draw_dps(&mut self, ui: &mut egui::Ui) {
         self.poll_engine();
 
         ui.horizontal(|ui| {
-            let (out_dps, in_dps) = self
-                .dps_samples
-                .last()
-                .map(|s| (s.outgoing_dps, s.incoming_dps))
-                .unwrap_or((0.0, 0.0));
+            let (out_dps, in_dps, peak_out, peak_in) = if let Some(sample) = self.dps_samples.last()
+            {
+                let current_top_out = sample
+                    .outgoing_by_target
+                    .values()
+                    .fold(0.0_f32, |acc, v| acc.max(*v));
+                let current_top_in = sample
+                    .incoming_by_source
+                    .values()
+                    .fold(0.0_f32, |acc, v| acc.max(*v));
 
-            ui.label("DPS:");
-            ui.separator();
+                self.peak_out_dps = self.peak_out_dps.max(current_top_out);
+                self.peak_in_dps = self.peak_in_dps.max(current_top_in);
+
+                (
+                    sample.outgoing_dps,
+                    sample.incoming_dps,
+                    self.peak_out_dps,
+                    self.peak_in_dps,
+                )
+            } else {
+                (0.0, 0.0, 0.0, 0.0)
+            };
+
             ui.label(format!("Out: {:.1}", out_dps));
             ui.label(format!("In: {:.1}", in_dps));
-            ui.label(format!("Total: {:.0}", self.total_damage));
-
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let mut value = self.dps_window_secs as f64;
-                ui.add(
-                    egui::DragValue::new(&mut value)
-                        .clamp_range(1.0..=60.0)
-                        .speed(0.2)
-                        .fixed_decimals(0),
-                );
-                ui.label("Window (s):");
-                self.dps_window_secs = value.round().clamp(1.0, 60.0) as u64;
-            });
+            ui.label(format!("Peak Out: {:.1}", peak_out));
+            ui.label(format!("Peak In: {:.1}", peak_in));
         });
 
         // DPS history chart using egui::plot
@@ -322,30 +328,23 @@ impl AbyssWatcherApp {
             let start = len.saturating_sub(max_points);
             let slice = &self.dps_samples[start..];
 
-            let mut max_val = 0.0_f32;
+            let window_secs_f = self.dps_window_secs.max(1) as f64;
+
             let mut out_points = Vec::with_capacity(slice.len());
             let mut in_points = Vec::with_capacity(slice.len());
 
+            let last_time = slice.last().map(|s| s.time.as_secs_f64()).unwrap_or(0.0);
+
             for sample in slice {
-                let t = sample.time.as_secs_f64();
-                out_points.push([t, sample.outgoing_dps as f64]);
-                in_points.push([t, sample.incoming_dps as f64]);
-                max_val = max_val.max(sample.outgoing_dps).max(sample.incoming_dps);
+                let t_rel = sample.time.as_secs_f64() - last_time; // 0 at "now", negative to the left
+                out_points.push([t_rel, sample.outgoing_dps as f64]);
+                in_points.push([t_rel, sample.incoming_dps as f64]);
             }
 
-            let target_max = max_val.max(10.0);
-            if self.display_max_dps <= 0.0 {
-                self.display_max_dps = target_max;
-            } else {
-                // Smoothly approach the new max to avoid jumpy zooming.
-                let lerp_up = 0.2;
-                let lerp_down = 0.05;
-                if target_max > self.display_max_dps {
-                    self.display_max_dps += (target_max - self.display_max_dps) * lerp_up;
-                } else {
-                    self.display_max_dps += (target_max - self.display_max_dps) * lerp_down;
-                }
-            }
+            // Use session peaks to define a stable Y range for the plot,
+            // but add some headroom so the graph doesn't hug the top edge.
+            let peak_max = self.peak_out_dps.max(self.peak_in_dps).max(10.0);
+            self.display_max_dps = (peak_max * 1.15).max(10.0);
 
             let out_line = Line::new(PlotPoints::from(out_points))
                 .name("Outgoing DPS")
@@ -355,24 +354,73 @@ impl AbyssWatcherApp {
                 .color(egui::Color32::from_rgb(255, 64, 64));
 
             ui.add_space(4.0);
-            Plot::new("dps_history")
+            let plot_resp = Plot::new("dps_history")
                 .height(140.0)
                 .set_margin_fraction(egui::vec2(0.0, 0.0))
+                .y_axis_width(3)
+                // We draw numeric labels ourselves; keep grid only.
+                .show_axes(egui::Vec2b::new(false, false))
+                .show_grid(egui::Vec2b::new(true, true))
+                .auto_bounds(egui::Vec2b::new(false, false))
                 .allow_drag(false)
                 .allow_boxed_zoom(false)
                 .allow_scroll(false)
                 .allow_zoom(false)
-                .include_y(0.0)
-                .include_y(self.display_max_dps as f64)
                 .show(ui, |plot_ui| {
+                    let bounds = PlotBounds::from_min_max(
+                        [-window_secs_f, 0.0],
+                        [0.0, self.display_max_dps.max(1.0) as f64],
+                    );
+                    plot_ui.set_plot_bounds(bounds);
                     plot_ui.line(out_line);
                     plot_ui.line(in_line);
                 });
+
+            // Custom axis labels: X on bottom (seconds relative to now), Y on left (DPS).
+            let transform = plot_resp.transform;
+            let frame = *transform.frame();
+            let text_color = ui.visuals().strong_text_color();
+            let font_id = egui::TextStyle::Body.resolve(ui.style());
+            let painter = ui.painter();
+
+            // X-axis ticks: 0 (now) and negative seconds at regular intervals,
+            // drawn just below the plot frame.
+            let x_min = -window_secs_f;
+            let x_step = (window_secs_f / 3.0).max(1.0);
+            let mut x = 0.0;
+            while x >= x_min {
+                let pos = transform.position_from_point(&PlotPoint::new(x, 0.0));
+                let label = format!("{:.0}", x);
+                painter.text(
+                    egui::pos2(pos.x, frame.bottom() + 4.0),
+                    egui::Align2::CENTER_TOP,
+                    label,
+                    font_id.clone(),
+                    text_color,
+                );
+                x -= x_step;
+            }
+
+            // Y-axis ticks: 0, 1/3, 2/3, and peak, drawn just to the left of the plot frame.
+            let y_max = self.display_max_dps.max(1.0);
+            let y_step = y_max / 4.0;
+            for i in 0..=4 {
+                let value = y_step * i as f32;
+                let pos = transform.position_from_point(&PlotPoint::new(0.0, value as f64));
+                let label = format!("{:.0}", value);
+                painter.text(
+                    egui::pos2(frame.left() - 14.0, pos.y),
+                    egui::Align2::RIGHT_CENTER,
+                    label,
+                    font_id.clone(),
+                    text_color,
+                );
+            }
         }
 
         // Detailed targets / incoming lists based on latest sample
         if let Some(sample) = self.dps_samples.last() {
-            ui.add_space(6.0);
+            ui.add_space(16.0);
             ui.horizontal(|ui| {
                 ui.vertical(|ui| {
                     ui.label("Top targets");
@@ -453,14 +501,17 @@ impl eframe::App for AbyssWatcherApp {
         // Custom menu bar (window title is handled by native decorations)
         egui::TopBottomPanel::top("menu_bar")
             .frame(
-                egui::Frame::none().fill(egui::Color32::from_rgba_unmultiplied(
-                    0,
-                    0,
-                    0,
-                    (self.opacity * 255.0) as u8,
-                )),
+                egui::Frame::none()
+                    .fill(egui::Color32::from_rgba_unmultiplied(
+                        0,
+                        0,
+                        0,
+                        (self.opacity * 255.0) as u8,
+                    ))
+                    .inner_margin(egui::Margin::symmetric(6.0, 4.0)),
             )
             .show(ctx, |ui| {
+                ui.visuals_mut().override_text_color = Some(egui::Color32::from_rgb(235, 235, 235));
                 egui::menu::bar(ui, |ui| {
                     ui.menu_button("View", |ui| {
                         ui.label("Opacity");
@@ -491,20 +542,40 @@ impl eframe::App for AbyssWatcherApp {
                             }
                         }
                     });
+
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let mut value = self.dps_window_secs as f64;
+                        ui.add(
+                            egui::DragValue::new(&mut value)
+                                .clamp_range(1.0..=60.0)
+                                .speed(0.2)
+                                .fixed_decimals(0),
+                        );
+                        ui.label("Window (s):");
+                        self.dps_window_secs = value.round().clamp(1.0, 60.0) as u64;
+                    });
                 });
             });
 
         // Main content panel with semi-transparent background
         egui::CentralPanel::default()
             .frame(
-                egui::Frame::none().fill(egui::Color32::from_rgba_unmultiplied(
-                    0,
-                    0,
-                    0,
-                    (self.opacity * 255.0) as u8,
-                )),
+                egui::Frame::none()
+                    .fill(egui::Color32::from_rgba_unmultiplied(
+                        0,
+                        0,
+                        0,
+                        (self.opacity * 255.0) as u8,
+                    ))
+                    .inner_margin(egui::Margin {
+                        left: 46.0,
+                        right: 12.0,
+                        top: 4.0,
+                        bottom: 22.0,
+                    }),
             )
             .show(ctx, |ui| {
+                ui.visuals_mut().override_text_color = Some(egui::Color32::from_rgb(235, 235, 235));
                 egui::ScrollArea::vertical()
                     .id_source("main_scroll")
                     .show(ui, |ui| {
