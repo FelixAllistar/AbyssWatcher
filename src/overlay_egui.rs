@@ -40,6 +40,25 @@ impl Default for PersistedState {
     }
 }
 
+fn round_up_to_step(value: f32, step: f32) -> f32 {
+    if step <= 0.0 {
+        return value;
+    }
+    (value / step).ceil() * step
+}
+
+fn nice_rounded_max(value: f32) -> f32 {
+    let v = value.max(0.0);
+    if v <= 500.0 {
+        round_up_to_step(v, 50.0)
+    } else if v <= 5_000.0 {
+        round_up_to_step(v, 100.0)
+    } else {
+        let magnitude = 10_f32.powi((v.log10().floor() as i32).saturating_sub(1));
+        round_up_to_step(v, magnitude.max(100.0))
+    }
+}
+
 fn load_persisted_state() -> PersistedState {
     if let Ok(text) = fs::read_to_string("app_state.json") {
         if let Ok(state) = serde_json::from_str::<PersistedState>(&text) {
@@ -86,6 +105,12 @@ pub fn run_overlay() {
         ))
         .with_transparent(true);
 
+    // Set explicit window title and icon.
+    viewport_builder = viewport_builder.with_title("AbyssWatcher");
+    if let Ok(icon) = eframe::icon_data::from_png_bytes(include_bytes!("../AbyssWatcher.png")) {
+        viewport_builder = viewport_builder.with_icon(icon);
+    }
+
     if persisted.has_position {
         viewport_builder = viewport_builder.with_position(egui::pos2(persisted.x, persisted.y));
     }
@@ -96,7 +121,7 @@ pub fn run_overlay() {
     };
 
     let _ = eframe::run_native(
-        "AbyssWatcher DPS Meter",
+        "AbyssWatcher",
         options,
         Box::new(move |_cc| Box::new(AbyssWatcherApp::new(persisted.clone()))),
     );
@@ -342,9 +367,11 @@ impl AbyssWatcherApp {
             }
 
             // Use session peaks to define a stable Y range for the plot,
-            // but add some headroom so the graph doesn't hug the top edge.
+            // add some headroom so the graph doesn't hug the top edge,
+            // then round up to a "nice" value (50/100/etc).
             let peak_max = self.peak_out_dps.max(self.peak_in_dps).max(10.0);
-            self.display_max_dps = (peak_max * 1.15).max(10.0);
+            let with_headroom = (peak_max * 1.15).max(10.0);
+            self.display_max_dps = nice_rounded_max(with_headroom);
 
             let out_line = Line::new(PlotPoints::from(out_points))
                 .name("Outgoing DPS")
@@ -418,7 +445,7 @@ impl AbyssWatcherApp {
             }
         }
 
-        // Detailed targets / incoming lists based on latest sample
+        // Detailed targets / incoming / weapon lists based on latest sample
         if let Some(sample) = self.dps_samples.last() {
             ui.add_space(16.0);
             ui.horizontal(|ui| {
@@ -439,7 +466,6 @@ impl AbyssWatcherApp {
                         }
                     }
                 });
-
                 ui.separator();
 
                 ui.vertical(|ui| {
@@ -452,6 +478,28 @@ impl AbyssWatcherApp {
                             .iter()
                             .map(|(name, dps)| (name.as_str(), *dps))
                             .collect();
+                        entries.sort_by(|a, b| b.1.total_cmp(&a.1));
+
+                        for (name, dps) in entries {
+                            ui.label(format!("{name}: {dps:.1}"));
+                        }
+                    }
+                });
+
+                ui.separator();
+
+                ui.vertical(|ui| {
+                    ui.label("Top weapons");
+                    let mut entries: Vec<_> = sample
+                        .outgoing_by_weapon
+                        .iter()
+                        .filter(|(name, _)| !name.is_empty())
+                        .map(|(name, dps)| (name.as_str(), *dps))
+                        .collect();
+
+                    if entries.is_empty() {
+                        ui.label("None");
+                    } else {
                         entries.sort_by(|a, b| b.1.total_cmp(&a.1));
 
                         for (name, dps) in entries {

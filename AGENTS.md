@@ -1,4 +1,4 @@
-# AbyssWatcher DPS Meter
+# AbyssWatcher
 
 This project is a DPS (Damage Per Second) Meter for EVE Online. It reads combat logs from local files and displays real-time damage tracking data in an overlay window. The overlay is a transparent, always-on-top HUD that shows metrics like health, DPS, and other combat stats without interfering with the game.
 
@@ -10,6 +10,8 @@ This project is a DPS (Damage Per Second) Meter for EVE Online. It reads combat 
 ## Architecture Overview
 
 - The crate builds a **single desktop binary** (`abyss-watcher`) with one visible `egui` overlay window (via `eframe`).
+  - The native window title is **"AbyssWatcher"**.
+  - The window/taskbar icon is embedded via `include_bytes!("../AbyssWatcher.png")` and configured through `ViewportBuilder::with_icon`.
 - Core logic is separated from UI:
   - `src/core/` holds **domain code** only (no UI framework types): data models, log parsing, log I/O, DPS math, and engine state.
     - `model.rs` – combat events, DPS samples, fight summaries.
@@ -37,6 +39,19 @@ This project is a DPS (Damage Per Second) Meter for EVE Online. It reads combat 
 - Preserve the overlay constraints:
  - Transparent/semi-transparent background, always on top, no extra windows.
  - Dragging the custom title bar moves the window; closing the window saves state and exits.
+  - The main content uses a scrollable column; avoid adding nested scroll areas for primary HUD content.
+
+## Overlay Graph & Axes
+
+- The DPS history chart uses `egui_plot::Plot` with:
+  - Manual bounds: X shows a sliding `[-window_secs, 0]` range (seconds relative to "now"), Y shows `[0, display_max_dps]`.
+  - `display_max_dps` is derived from session peaks with headroom and rounded up using `nice_rounded_max` for clean axis max values.
+- Built-in plot axis labels are disabled; axis numeric labels are rendered manually using the plot transform so they:
+  - Always show, regardless of egui_plot spacing heuristics.
+  - Appear outside the graph (Y to the left, X below) using panel-level margins.
+- When changing layout around the plot:
+  - Keep outer margins large enough that custom axis labels are not clipped.
+  - Do not re-enable egui_plot auto-bounds or axis labels unless you also remove the custom painter-based labels.
 
 ## Gamelog UX Notes
 

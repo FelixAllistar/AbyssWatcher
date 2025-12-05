@@ -125,11 +125,9 @@ fn split_entities_and_weapon(
     direction: DamageDirection,
     listener: &str,
 ) -> Option<(String, String, String)> {
-    let trimmed = remainder.trim();
-
     match direction {
         DamageDirection::Outgoing => {
-            let mut text = trimmed;
+            let mut text = remainder.trim();
             for prefix in ["to ", "against "] {
                 if text.starts_with(prefix) {
                     text = text.strip_prefix(prefix)?.trim();
@@ -139,7 +137,16 @@ fn split_entities_and_weapon(
 
             let parts: Vec<_> = text.split(" - ").collect();
             let target = parts.get(0)?.trim();
-            let weapon = parts.get(1).map(|value| value.trim()).unwrap_or("");
+
+            // When weapon types are disabled in logs, the pattern is:
+            //   "<damage> to <target> - <quality>"
+            // which yields only two segments after splitting on " - ".
+            // In that case we should *not* treat the quality word as a weapon.
+            let weapon = if parts.len() >= 3 {
+                parts.get(1).map(|value| value.trim()).unwrap_or("")
+            } else {
+                ""
+            };
 
             if target.is_empty() {
                 return None;
@@ -148,14 +155,22 @@ fn split_entities_and_weapon(
             Some((listener.to_string(), target.to_string(), weapon.to_string()))
         }
         DamageDirection::Incoming => {
-            let mut text = trimmed;
+            let mut text = remainder.trim();
             if text.starts_with("from ") {
                 text = text.strip_prefix("from ")?.trim();
             }
 
             let parts: Vec<_> = text.split(" - ").collect();
             let source = parts.get(0)?.trim();
-            let weapon = parts.get(1).map(|value| value.trim()).unwrap_or("");
+
+            // Same logic as outgoing: if we only see
+            //   "<damage> from <source> - <quality>"
+            // then there is no weapon segment present.
+            let weapon = if parts.len() >= 3 {
+                parts.get(1).map(|value| value.trim()).unwrap_or("")
+            } else {
+                ""
+            };
 
             if source.is_empty() {
                 return None;
@@ -224,5 +239,40 @@ mod tests {
         assert_eq!(event.source, "Guristas Heavy Missile Battery");
         assert_eq!(event.target, "You");
         assert_eq!(event.weapon, "Inferno Heavy Missile");
+    }
+
+    #[test]
+    fn parses_outgoing_without_weapon_and_leaves_weapon_empty() {
+        let mut parser = LineParser::new();
+        let _ = parser.parse_line("Session Started: 2025.12.04 09:57:00", "You");
+
+        // Example with weapon types disabled:
+        // damage + direction + target + quality, but no explicit weapon segment.
+        let line = "[ 2025.12.04 09:57:35 ] (combat) 127 to Snarecaster Tessella - Grazes";
+
+        let event = parser.parse_line(line, "You").expect("should parse");
+
+        assert_eq!(event.damage, 127.0);
+        assert!(!event.incoming);
+        assert_eq!(event.source, "You");
+        assert_eq!(event.target, "Snarecaster Tessella");
+        assert_eq!(event.weapon, "");
+    }
+
+    #[test]
+    fn parses_incoming_without_weapon_and_leaves_weapon_empty() {
+        let mut parser = LineParser::new();
+        let _ = parser.parse_line("Session Started: 2025.12.04 09:57:00", "You");
+
+        let line =
+            "[ 2025.12.04 09:57:35 ] (combat) 44 from Guristas Heavy Missile Battery - Hits";
+
+        let event = parser.parse_line(line, "You").expect("should parse");
+
+        assert!(event.incoming);
+        assert_eq!(event.damage, 44.0);
+        assert_eq!(event.source, "Guristas Heavy Missile Battery");
+        assert_eq!(event.target, "You");
+        assert_eq!(event.weapon, "");
     }
 }
