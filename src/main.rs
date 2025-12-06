@@ -1,6 +1,8 @@
 mod core;
 mod overlay_egui;
+mod overlay_gpui;
+ 
+ fn main() {
+     overlay_gpui::run_overlay();
+ }
 
-fn main() {
-    overlay_egui::run_overlay();
-}
