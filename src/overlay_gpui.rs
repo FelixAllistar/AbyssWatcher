@@ -5,13 +5,13 @@ use std::time::{Duration, Instant, SystemTime};
 
 use crate::core::{log_io, model, state, tracker};
 use gpui::{
-    App, Application, ClickEvent, Context, Entity, Render, Subscription, Window,
+    App, Application, Axis, ClickEvent, Context, Entity, Render, Subscription, Window,
     WindowBackgroundAppearance, WindowOptions,
 };
 use gpui::prelude::*;
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::input::{Input, InputEvent, InputState};
-use gpui::{div, rgb, rgba, Hsla, SharedString};
+use gpui::{div, rgba, Hsla, SharedString};
 use gpui_component::plot::{
     scale::{Scale, ScaleLinear, ScalePoint},
     shape::Line as PlotLine,
@@ -20,6 +20,7 @@ use gpui_component::plot::{
 use gpui_component::plot::IntoPlot;
 use gpui_component::PixelsExt;
 use gpui_component::theme::{ActiveTheme as _, Theme, ThemeMode};
+use gpui_component::StyledExt;
 use gpui_component::{h_flex, v_flex};
 use serde::{Deserialize, Serialize};
 
@@ -86,6 +87,33 @@ fn nice_rounded_max(value: f32) -> f32 {
 fn save_persisted_state(state: &PersistedState) {
     if let Ok(json) = serde_json::to_string_pretty(state) {
         let _ = fs::write("app_state.json", json);
+    }
+}
+
+fn abbreviate_label(input: &str) -> String {
+    let mut words = input.split_whitespace();
+    let mut parts = Vec::new();
+    while let Some(word) = words.next() {
+        let mut shortened = String::new();
+        for (idx, ch) in word.chars().enumerate() {
+            if idx >= 4 {
+                shortened.push('.');
+                break;
+            }
+            shortened.push(ch);
+        }
+        if shortened.is_empty() {
+            continue;
+        }
+        parts.push(shortened);
+        if parts.len() >= 3 {
+            break;
+        }
+    }
+    if parts.is_empty() {
+        input.to_string()
+    } else {
+        parts.join(" ")
     }
 }
 
@@ -556,149 +584,210 @@ impl Render for AbyssWatcherView {
         // Background: #141414 with variable opacity
         // Top Bar: #0a0a0a with slightly higher opacity
         // Text: #ebebeb
-        let alpha_byte = (self.opacity * 255.0) as u32;
-        let bar_alpha_byte = ((self.opacity * 0.9 + 0.1).min(1.0) * 255.0) as u32; // Slightly more opaque
-        
-        // gpui::rgba takes u32 as 0xRRGGBBAA
-        let bg_color = rgba((0x14 << 24) | (0x14 << 16) | (0x14 << 8) | alpha_byte);
-        let bar_bg_color = rgba((0x0a << 24) | (0x0a << 16) | (0x0a << 8) | bar_alpha_byte);
-        let text_color = rgb(0xebebeb);
-        let border_color = rgba(0x333333ff); // Subtle border
+        // Theme Definitions - Pro Dark / Gold "Banana" Accent
+        struct OverlayTheme {
+            bg: Hsla,
+            surface: Hsla,
+            border: Hsla,
+            accent: Hsla,
+            accent_hover: Hsla,
+            text_primary: Hsla,
+            text_secondary: Hsla,
+            text_muted: Hsla,
+            success: Hsla,
+            danger: Hsla,
+        }
 
-        let mut root = v_flex()
-            .size_full()
-            .bg(bg_color)
-            .text_color(text_color);
-
-        // Top bar
-        let top_bar = {
-            let mut bar = h_flex()
-                .items_center()
-                .justify_between() // Space out left and right items
-                .px_3()
-                .py_1()
-                .bg(bar_bg_color)
-                .border_b_1()
-                .border_color(border_color);
-
-            // Left: Characters Menu
-            let chars_label = if self.characters.is_empty() {
-                "Characters".to_string()
-            } else {
-                let count = self.characters.iter().filter(|c| c.tracked).count();
-                if count == 0 {
-                    "Characters".to_string()
-                } else {
-                    format!("Characters ({})", count)
-                }
-            };
-
-            let chars_button = Button::new("characters-btn")
-                .label(chars_label)
-                .ghost()
-                .on_click(cx.listener(|this, _: &ClickEvent, _window: &mut Window, cx: &mut Context<Self>| {
-                    this.show_characters_menu = !this.show_characters_menu;
-                    cx.notify();
-                }));
-
-            // Right: Controls
-            let controls = h_flex()
-                .items_center()
-                .gap_4()
-                // Opacity
-                .child(
-                    h_flex()
-                        .items_center()
-                        .gap_1()
-                        .child("Opacity")
-                        .child(format!("{:.0}%", self.opacity * 100.0))
-                        .child(
-                            Button::new("opacity-dec")
-                                .label("-")
-                                .compact()
-                                .ghost()
-                                .on_click(cx.listener(|this, _: &ClickEvent, _window: &mut Window, cx: &mut Context<Self>| {
-                                    this.opacity = (this.opacity - 0.05).max(0.2);
-                                    this.persist();
-                                    cx.notify();
-                                })),
-                        )
-                        .child(
-                            Button::new("opacity-inc")
-                                .label("+")
-                                .compact()
-                                .ghost()
-                                .on_click(cx.listener(|this, _: &ClickEvent, _window: &mut Window, cx: &mut Context<Self>| {
-                                    this.opacity = (this.opacity + 0.05).min(1.0);
-                                    this.persist();
-                                    cx.notify();
-                                })),
-                        )
-                )
-                // Window
-                .child(
-                    h_flex()
-                        .items_center()
-                        .gap_1()
-                        .child("Window")
-                        .child(format!("{}s", self.dps_window_secs))
-                        .child(
-                            Button::new("window-dec")
-                                .label("-")
-                                .compact()
-                                .ghost()
-                                .on_click(cx.listener(|this, _: &ClickEvent, _window: &mut Window, cx: &mut Context<Self>| {
-                                    if this.dps_window_secs > 1 {
-                                        this.dps_window_secs -= 1;
-                                        this.persist();
-                                        cx.notify();
-                                    }
-                                })),
-                        )
-                        .child(
-                            Button::new("window-inc")
-                                .label("+")
-                                .compact()
-                                .ghost()
-                                .on_click(cx.listener(|this, _: &ClickEvent, _window: &mut Window, cx: &mut Context<Self>| {
-                                    if this.dps_window_secs < 60 {
-                                        this.dps_window_secs += 1;
-                                        this.persist();
-                                        cx.notify();
-                                    }
-                                })),
-                        )
-                );
-
-            bar = bar.child(chars_button).child(controls);
-            bar
+        let theme_colors = OverlayTheme {
+            // #141414 -> Deep neutral background
+            bg: rgba(0x141414ff * self.opacity as u32).into(), // Dynamic opacity base
+            // #1c1c1c -> Slightly lighter surface
+            surface: rgba(0x1c1c1cff).into(),
+            // #333333 -> Subtle border
+            border: rgba(0x333333ff).into(),
+            // #FFD700 -> Gold/Banana accent
+            accent: rgba(0xFFD700ff).into(), 
+            accent_hover: rgba(0xE6C200ff).into(),
+            // #FFFFFF
+            text_primary: rgba(0xFFFFFFFF).into(),
+            // #A1A1AA
+            text_secondary: rgba(0xA1A1AAff).into(),
+            // #52525B
+            text_muted: rgba(0x52525Bff).into(),
+            // Activity/Status colors
+            success: rgba(0x4ADE80ff).into(), // Green
+            danger: rgba(0xF87171ff).into(),  // Red
         };
-        root = root.child(top_bar);
+        
+        // Window Background - Transparent to allow custom drawing
+        // We use a container div to act as the "real" window background with borders
+        let window_frame = v_flex()
+            .size_full()
+            .bg(rgba(0x14141400)) // Fully transparent window base
+            .child(
+                v_flex()
+                    .size_full()
+                    .rounded_xl() // Nice rounded corners for the floating card look
+                    .border_1()
+                    .border_color(theme_colors.border)
+                    // The main background color with user-controlled opacity
+                    .bg(rgba((0x14 << 24) | (0x14 << 16) | (0x14 << 8) | (self.opacity * 255.0) as u32))
+                    .text_color(theme_colors.text_primary)
+                    .shadow_xl() // Drop shadow
+                    .child( {
+                        // Top Bar - Glassy/Pill style header
+                        h_flex()
+                            .items_center()
+                            .justify_between()
+                            .px_4()
+                            .py_2()
+                            .border_b_1()
+                            .border_color(rgba(0xFFFFFF0D)) // Very subtle divider
+                            .child(
+                                // Left: Title / Characters
+                                h_flex().items_center().gap_2().child(
+                                    if self.characters.is_empty() {
+                                        div().child("AbyssWatcher").text_color(theme_colors.text_muted).text_sm().into_any_element()
+                                    } else {
+                                        let count = self.characters.iter().filter(|c| c.tracked).count();
+                                        Button::new("characters-btn")
+                                            .label(if count > 0 { format!("Running ({})", count) } else { "Select Source".to_string() })
+                                            .ghost()
+                                            .text_color(theme_colors.accent)
+                                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                                this.show_characters_menu = !this.show_characters_menu;
+                                                cx.notify();
+                                            }))
+                                            .into_any_element()
+                                    }
+                                )
+                            )
+                            .child(
+                                // Right: Controls (Opacity / Window)
+                                h_flex().gap_2().child(
+                                    // Opacity Pill
+                                    h_flex()
+                                        .bg(rgba(0xFFFFFF0D))
+                                        .rounded_full()
+                                        .px_2()
+                                        .py_1()
+                                        .gap_1()
+                                        .items_center()
+                                        .child(
+                                            div()
+                                                .child(format!("{:.0}%", self.opacity * 100.0))
+                                                .text_xs()
+                                                .text_color(theme_colors.text_secondary)
+                                        )
+                                        .child(
+                                            div()
+                                                .w_2()
+                                                .h_2()
+                                                .rounded_full()
+                                                .bg(theme_colors.accent)
+                                                .opacity(self.opacity) // Visual indicator
+                                        )
+                                        .child(
+                                            h_flex()
+                                                .gap_1()
+                                                .child(
+                                                    div().id("op-dec").cursor_pointer().child("-").text_xs().text_color(theme_colors.text_muted)
+                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                            this.opacity = (this.opacity - 0.1).max(0.2);
+                                                            this.persist();
+                                                            cx.notify();
+                                                        }))
+                                                )
+                                                .child(
+                                                    div().id("op-inc").cursor_pointer().child("+").text_xs().text_color(theme_colors.text_muted)
+                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                            this.opacity = (this.opacity + 0.1).min(1.0);
+                                                            this.persist();
+                                                            cx.notify();
+                                                        }))
+                                                )
+                                        )
+                                )
+                                .child(
+                                    // Window Pill
+                                    h_flex()
+                                        .bg(rgba(0xFFFFFF0D))
+                                        .rounded_full()
+                                        .px_2()
+                                        .py_1()
+                                        .gap_1()
+                                        .items_center()
+                                        .child(
+                                            div().child(format!("{}s", self.dps_window_secs)).text_xs().text_color(theme_colors.text_secondary)
+                                        )
+                                        .child(
+                                            h_flex()
+                                                .gap_1()
+                                                .child(
+                                                    div().id("win-dec").cursor_pointer().child("-").text_xs().text_color(theme_colors.text_muted)
+                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                            this.dps_window_secs = (this.dps_window_secs - 1).max(1);
+                                                            this.persist();
+                                                            cx.notify();
+                                                        }))
+                                                )
+                                                .child(
+                                                    div().id("win-inc").cursor_pointer().child("+").text_xs().text_color(theme_colors.text_muted)
+                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                            this.dps_window_secs = (this.dps_window_secs + 1).min(300);
+                                                            this.persist();
+                                                            cx.notify();
+                                                        }))
+                                                )
+                                        )
+                                )
+                            )
+                    } )
+            );
+
+        let mut root = window_frame;
+
+
 
         // Body scrollable content
+        let screen_width = bounds.size.width.as_f32();
+        let screen_height = bounds.size.height.as_f32();
+        
+        // Ultra-compact mode for tiny windows
+        let is_ultra_compact = screen_height < 200.0 || screen_width < 300.0;
+
         let mut body = v_flex()
             .id("body_scroll")
-            .gap_4()
-            .pl(gpui::px(46.0)) // Left padding ~46px
-            .pr(gpui::px(12.0)) // Right padding ~12px
-            .pt_3()
-            .pb_6()
-            .flex_1();
+            .gap(gpui::px(4.0)) // Minimal gap always
+            .px(gpui::px(8.0))
+            .py(gpui::px(4.0))
+            .flex_1()
+            .text_xs() // Always small text for compact display
+            .scrollable(Axis::Vertical);
 
+        // Ultra-compact DPS display: single row "OUT 123.4 | IN 56.7"
+        let dps_row = h_flex()
+            .gap(gpui::px(12.0))
+            .items_center()
+            .child(
+                h_flex().gap(gpui::px(4.0)).items_baseline()
+                    .child(div().child("OUT").text_color(theme_colors.text_muted))
+                    .child(div().child(format!("{:.1}", out_dps)).font_weight(gpui::FontWeight::BOLD).text_color(theme_colors.accent))
+                    .child(div().child(format!("pk {:.0}", peak_out)).text_color(theme_colors.text_muted))
+            )
+            .child(
+                h_flex().gap(gpui::px(4.0)).items_baseline()
+                    .child(div().child("IN").text_color(theme_colors.text_muted))
+                    .child(div().child(format!("{:.1}", in_dps)).font_weight(gpui::FontWeight::BOLD).text_color(theme_colors.danger))
+                    .child(div().child(format!("pk {:.0}", peak_in)).text_color(theme_colors.text_muted))
+            );
 
-        // DPS summary row
-        let header = h_flex()
-            .gap_6()
-            .child(format!("Out: {:.1}", out_dps))
-            .child(format!("In: {:.1}", in_dps))
-            .child(format!("Peak Out: {:.1}", peak_out))
-            .child(format!("Peak In: {:.1}", peak_in));
-        body = body.child(header);
+        body = body.child(dps_row);
 
-        // DPS chart
+        // Thin chart (40px for ultra-compact, 80px otherwise)
         if !self.dps_samples.is_empty() {
             let window_secs = self.dps_window_secs.max(1) as f32;
-            let max_points = 180usize;
+            let max_points = if is_ultra_compact { 100 } else { 200 };
             let len = self.dps_samples.len();
             let start = len.saturating_sub(max_points);
             let slice = &self.dps_samples[start..];
@@ -712,11 +801,10 @@ impl Render for AbyssWatcherView {
             let mut points: Vec<DpsPoint> = Vec::with_capacity(slice.len());
             for sample in slice {
                 let t_rel = sample.time.as_secs_f64() as f32 - last_time;
-                // Only keep points within the current window.
                 if t_rel < x_min {
                     continue;
                 }
-                let label = SharedString::from(format!("{:.0}", t_rel));
+                let label = SharedString::from(format!("{}", t_rel.abs().round())); 
                 points.push(DpsPoint {
                     label,
                     outgoing: sample.outgoing_dps as f64,
@@ -725,20 +813,22 @@ impl Render for AbyssWatcherView {
             }
 
             if !points.is_empty() {
-                let desired_ticks = 8usize;
-                let tick_margin = (points.len() / desired_ticks).max(1);
+                let tick_margin = (points.len() / 4).max(1);
 
                 let chart = DpsChart::new(
                     points,
-                    theme.chart_1,
-                    theme.chart_2,
+                    theme_colors.accent,
+                    theme_colors.danger,
                     tick_margin,
                     self.display_max_dps as f64,
                 );
 
+                // Ultra-compact chart: just 40px tall, no padding, no border
+                let chart_height = if is_ultra_compact { gpui::px(40.0) } else { gpui::px(80.0) };
+
                 let chart_container = div()
-                    .min_h(gpui::px(140.0))
-                    .flex_1()
+                    .h(chart_height)
+                    .w_full()
                     .child(chart);
 
                 body = body.child(chart_container);
@@ -750,125 +840,148 @@ impl Render for AbyssWatcherView {
             let mut menu = v_flex()
                 .gap_1()
                 .p_2()
-                .bg(theme.popover)
+                .bg(theme_colors.surface)
                 .border_1()
-                .border_color(theme.border)
+                .border_color(theme_colors.border)
                 .rounded_md()
-                .shadow_lg();
+                .shadow_lg()
+                .mb_4(); // Add margin bottom to separate from content
 
             if self.characters.is_empty() {
-                menu = menu.child("No characters detected");
+                menu = menu.child(div().child("No characters detected").text_sm().text_color(theme_colors.text_muted));
             } else {
                 for (i, entry) in self.characters.iter().enumerate() {
-                    let file_name = entry
-                        .file_path
-                        .file_name()
-                        .and_then(|v| v.to_str())
-                        .unwrap_or_default()
-                        .to_string();
-                    let label = format!(
-                        "[{}] {} ({})",
-                        if entry.tracked { "x" } else { " " },
-                        entry.name,
-                        file_name
-                    );
-                    let idx = i;
-                    menu = menu.child(
-                        div()
-                            .id(("char-menu", idx))
-                            .cursor_pointer()
-                            .hover(|s| s.bg(theme.accent))
-                            .p_1()
-                            .rounded_sm()
-                            .child(label)
-                            .on_click(cx.listener(move |this, _: &ClickEvent, _window: &mut Window, cx: &mut Context<Self>| {
-                                if let Some(e) = this.characters.get_mut(idx) {
-                                    e.tracked = !e.tracked;
-                                    this.last_update = Instant::now() - Duration::from_millis(250);
-                                    this.persist();
-                                    cx.notify();
-                                }
-                            })),
-                    );
+                    let file_name = entry.file_path.file_name().and_then(|v| v.to_str()).unwrap_or_default();
+                    
+                    let is_selected = entry.tracked;
+                    let bg_style = if is_selected { rgba(0xFFFFFF11) } else { rgba(0x00000000) };
+                    
+                    let row = h_flex()
+                        .id(("char-menu", i))
+                        .cursor_pointer()
+                        .justify_between()
+                        .items_center()
+                        .p_2()
+                        .rounded_sm()
+                        .bg(bg_style)
+                        .hover(|s| s.bg(rgba(0xFFFFFF22)))
+                        .child(
+                            v_flex()
+                                .child(div().child(entry.name.clone()).text_sm().font_weight(gpui::FontWeight::BOLD).text_color(theme_colors.text_primary))
+                                .child(div().child(file_name.to_string()).text_xs().text_color(theme_colors.text_muted))
+                        )
+                        .child(
+                            if is_selected {
+                                div().w_2().h_2().rounded_full().bg(theme_colors.accent)
+                            } else {
+                                div()
+                            }
+                        )
+                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            if let Some(e) = this.characters.get_mut(i) {
+                                e.tracked = !e.tracked;
+                                this.last_update = Instant::now() - Duration::from_millis(250);
+                                this.persist();
+                                cx.notify();
+                            }
+                        }));
+                        
+                    menu = menu.child(row);
                 }
             }
             body = body.child(menu);
         }
-        
-        // Re-structure body construction to be cleaner
-        // ... (I will do this in the actual code block below)
 
-        // Detailed targets / incoming / weapon lists
-        if let Some(sample) = self.dps_samples.last() {
-            let mut stats_row = h_flex().gap_6().items_start();
+        // Detailed targets / incoming / weapon lists - only if not ultra-compact
+        if !is_ultra_compact {
+            if let Some(sample) = self.dps_samples.last() {
+                let mut stats_grid = h_flex().gap(gpui::px(8.0)).items_start().flex_wrap();
 
-            // Helper for columns
-            let make_column = |title: &str, items: Vec<(&str, f32)>| {
-                let mut col = v_flex().gap_1().flex_1();
-                col = col.child(
-                    div()
-                        .child(title.to_string())
-                        .font_weight(gpui::FontWeight::BOLD)
-                        .pb_1()
-                        .border_b_1()
-                        .border_color(rgba(0x555555ff))
-                );
-                
-                if items.is_empty() {
-                    col = col.child("None");
-                } else {
-                    for (name, dps) in items {
-                        col = col.child(
-                            h_flex()
-                                .justify_between()
-                                .child(name.to_string())
-                                .child(format!("{:.1}", dps))
-                        );
+                // Simple column helper - no card styling
+                let make_column = |title: &str, items: Vec<(String, f32)>| {
+                    let mut col = v_flex().gap_0p5().flex_1().min_w(gpui::px(90.0));
+
+                    col = col.child(
+                        div()
+                            .child(title.to_uppercase())
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::BOLD)
+                            .text_color(theme_colors.text_muted)
+                    );
+                    
+                    if items.is_empty() {
+                        col = col.child(div().child("-").text_xs().text_color(theme_colors.text_muted));
+                    } else {
+                        for (name, dps) in items.iter().take(5) { // Only top 5
+                            col = col.child(
+                                h_flex()
+                                    .justify_between()
+                                    .child(div().child(name.clone()).text_xs().text_color(theme_colors.text_secondary))
+                                    .child(div().child(format!("{:.0}", dps)).text_xs().text_color(theme_colors.text_primary))
+                            );
+                        }
                     }
-                }
-                col
-            };
+                    col
+                };
 
-            // Top targets
-            let mut target_entries: Vec<_> = sample
-                .outgoing_by_target
-                .iter()
-                .map(|(name, dps)| (name.as_str(), *dps))
-                .collect();
-            target_entries.sort_by(|a, b| b.1.total_cmp(&a.1));
-            stats_row = stats_row.child(make_column("Top Targets", target_entries));
+                // Top targets
+                let mut target_entries: Vec<_> = sample
+                    .outgoing_by_target
+                    .iter()
+                    .map(|(name, dps)| (abbreviate_label(name), *dps))
+                    .collect();
+                target_entries.sort_by(|a, b| b.1.total_cmp(&a.1));
+                stats_grid = stats_grid.child(make_column("Targets", target_entries));
 
-            // Top incoming
-            let mut incoming_entries: Vec<_> = sample
-                .incoming_by_source
-                .iter()
-                .map(|(name, dps)| (name.as_str(), *dps))
-                .collect();
-            incoming_entries.sort_by(|a, b| b.1.total_cmp(&a.1));
-            stats_row = stats_row.child(make_column("Top Incoming", incoming_entries));
+                // Top incoming
+                let mut incoming_entries: Vec<_> = sample
+                    .incoming_by_source
+                    .iter()
+                    .map(|(name, dps)| (abbreviate_label(name), *dps))
+                    .collect();
+                incoming_entries.sort_by(|a, b| b.1.total_cmp(&a.1));
+                stats_grid = stats_grid.child(make_column("Incoming", incoming_entries));
 
-            // Top weapons
-            let mut weapon_entries: Vec<_> = sample
-                .outgoing_by_weapon
-                .iter()
-                .filter(|(name, _)| !name.is_empty())
-                .map(|(name, dps)| (name.as_str(), *dps))
-                .collect();
-            weapon_entries.sort_by(|a, b| b.1.total_cmp(&a.1));
-            stats_row = stats_row.child(make_column("Top Weapons", weapon_entries));
+                // Top weapons
+                let mut weapon_entries: Vec<_> = sample
+                    .outgoing_by_weapon
+                    .iter()
+                    .filter(|(name, _)| !name.is_empty())
+                    .map(|(name, dps)| (abbreviate_label(name), *dps))
+                    .collect();
+                weapon_entries.sort_by(|a, b| b.1.total_cmp(&a.1));
+                stats_grid = stats_grid.child(make_column("Weapons", weapon_entries));
 
-            body = body.child(stats_row);
+                body = body.child(stats_grid);
+            }
         }
 
-        // Gamelog folder input when nothing detected
+        // Gamelog folder input
         if self.characters.is_empty() {
-            let mut gamelog_ui = v_flex().gap_2().pt_4();
-            gamelog_ui = gamelog_ui.child("Gamelog folder:");
-            gamelog_ui = gamelog_ui.child(Input::new(&self.gamelog_input_state));
+            let mut gamelog_ui = v_flex()
+                .gap_3()
+                .pt_6()
+                .items_center();
+            
+            gamelog_ui = gamelog_ui.child(div().child("Gamelog Folder").font_weight(gpui::FontWeight::BOLD).text_color(theme_colors.text_primary));
+            
+            let input_container = div()
+                .w_full()
+                .max_w(gpui::px(300.0))
+                .p_1()
+                .bg(rgba(0xFFFFFF05))
+                .border_1()
+                .border_color(theme_colors.border)
+                .rounded_md()
+                .child(Input::new(&self.gamelog_input_state));
+                
+            gamelog_ui = gamelog_ui.child(input_container);
+            
             gamelog_ui = gamelog_ui.child(
                 Button::new("scan-gamelog-btn")
                     .label("Scan Gamelog Folder")
                     .primary()
+                    .text_color(theme_colors.bg) // Contrast text on primary button
                     .on_click(
                     cx.listener(|this, _: &ClickEvent, _window: &mut Window, cx: &mut Context<Self>| {
                         let path = PathBuf::from(this.gamelog_input.clone());
@@ -893,8 +1006,134 @@ impl Render for AbyssWatcherView {
 
             body = body.child(gamelog_ui);
         }
+        
+        // Window Background - Transparent to allow custom drawing
+        // We use a container div to act as the "real" window background with borders
+        // Top Bar - Glassy/Pill style header
+        let top_bar = h_flex()
+            .items_center()
+            .justify_between()
+            .px_4()
+            .py_2()
+            .border_b_1()
+            .border_color(rgba(0xFFFFFF0D)) // Very subtle divider
+            .child(
+                // Left: Title / Characters
+                h_flex().items_center().gap_2().child(
+                    if self.characters.is_empty() {
+                        div().child("AbyssWatcher").text_color(theme_colors.text_muted).text_sm().into_any_element()
+                    } else {
+                        let count = self.characters.iter().filter(|c| c.tracked).count();
+                        Button::new("characters-btn")
+                            .label(if count > 0 { format!("Running ({})", count) } else { "Select Source".to_string() })
+                            .ghost()
+                            .text_color(theme_colors.accent)
+                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                this.show_characters_menu = !this.show_characters_menu;
+                                cx.notify();
+                            }))
+                            .into_any_element()
+                    }
+                )
+            )
+            .child(
+                // Right: Controls (Opacity / Window)
+                h_flex().gap_2().child(
+                    // Opacity Pill
+                    h_flex()
+                        .bg(rgba(0xFFFFFF0D))
+                        .rounded_full()
+                        .px_2()
+                        .py_1()
+                        .gap_1()
+                        .items_center()
+                        .child(
+                            div()
+                                .child(format!("{:.0}%", self.opacity * 100.0))
+                                .text_xs()
+                                .text_color(theme_colors.text_secondary)
+                        )
+                        .child(
+                            div()
+                                .w_2()
+                                .h_2()
+                                .rounded_full()
+                                .bg(theme_colors.accent)
+                                .opacity(self.opacity) // Visual indicator
+                        )
+                        .child(
+                            h_flex()
+                                .gap_1()
+                                .child(
+                                    div().id("op-dec").cursor_pointer().child("-").text_xs().text_color(theme_colors.text_muted)
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.opacity = (this.opacity - 0.1).max(0.2);
+                                            this.persist();
+                                            cx.notify();
+                                        }))
+                                )
+                                .child(
+                                    div().id("op-inc").cursor_pointer().child("+").text_xs().text_color(theme_colors.text_muted)
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.opacity = (this.opacity + 0.1).min(1.0);
+                                            this.persist();
+                                            cx.notify();
+                                        }))
+                                )
+                        )
+                )
+                .child(
+                    // Window Pill
+                    h_flex()
+                        .bg(rgba(0xFFFFFF0D))
+                        .rounded_full()
+                        .px_2()
+                        .py_1()
+                        .gap_1()
+                        .items_center()
+                        .child(
+                            div().child(format!("{}s", self.dps_window_secs)).text_xs().text_color(theme_colors.text_secondary)
+                        )
+                        .child(
+                            h_flex()
+                                .gap_1()
+                                .child(
+                                    div().id("win-dec").cursor_pointer().child("-").text_xs().text_color(theme_colors.text_muted)
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.dps_window_secs = (this.dps_window_secs - 1).max(1);
+                                            this.persist();
+                                            cx.notify();
+                                        }))
+                                )
+                                .child(
+                                    div().id("win-inc").cursor_pointer().child("+").text_xs().text_color(theme_colors.text_muted)
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.dps_window_secs = (this.dps_window_secs + 1).min(300);
+                                            this.persist();
+                                            cx.notify();
+                                        }))
+                                )
+                        )
+                )
+            );
 
-        root = root.child(body);
-        root
+        let window_frame = v_flex()
+            .size_full()
+            .bg(rgba(0x14141400)) // Fully transparent window base
+            .child(
+                v_flex()
+                    .size_full()
+                    .rounded_xl() // Nice rounded corners for the floating card look
+                    .border_1()
+                    .border_color(theme_colors.border)
+                    // The main background color with user-controlled opacity
+                    .bg(theme_colors.bg)
+                    .text_color(theme_colors.text_primary)
+                    .shadow_xl() // Drop shadow
+                    .child(top_bar)
+                    .child(body)
+            );
+
+        window_frame
     }
 }

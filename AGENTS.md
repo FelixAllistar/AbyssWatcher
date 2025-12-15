@@ -94,3 +94,19 @@ This project is a DPS (Damage Per Second) Meter for EVE Online. It reads combat 
     - Extend the parser with additional classifiers (e.g. detect `" remote armor repaired "`, `"energy neutralized"`, `"energy nosferatu"`), but keep the existing outgoing/incoming damage semantics unchanged.
     - Add new per-entity aggregates in `DpsSample` (e.g. `rep_by_target`, `neut_by_source`) rather than mixing them into DPS maps.
   - Message filtering rules should stay explicit and centralized in `core::parser`, so overlay/graph components always consume already-filtered `CombatEvent`s.
+
+## GPUI Overlay Implementation
+
+- The project is transitioning to/adding a `gpui` based overlay in `src/overlay_gpui.rs`, aiming for visually "premium" aesthetics and correct transparency.
+- **Key Implementation Details**:
+  - **Transparency**: Achieved by using `WindowBackgroundAppearance::Transparent` in `WindowOptions` and ensuring the root view does **not** get wrapped in `gpui_component::Root` (which applies an opaque background).
+  - **Colors**: Uses `gpui::rgba` with `0xRRGGBBAA` hex values. Backgrounds are dark gray with variable opacity controlled by the user.
+    - Main Background: `#141414` (variable alpha)
+    - Top Bar: `#0a0a0a` (slightly higher opacity)
+    - Charts: Outgoing (Blue `#00BFFF`), Incoming (Red `#CD5C5C`)
+  - **Layout**:
+    - **Top Bar**: "Characters" dropdown (left), Opacity [-/+] and Window [X] controls (right).
+    - **DPS Header**: Summary metrics (Out, In, Peak Out, Peak In).
+    - **Charts**: Fixed height (140px) line charts for DPS history.
+    - **Stats Columns**: "Top Targets", "Top Incoming", "Top Weapons" rendered as flex columns with headers.
+  - **Theming**: Uses `gpui_component` for some widgets but custom styling for the main layout to match the specific "AbyssWatcher" look (referenced from `egui` version).
