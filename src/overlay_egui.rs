@@ -13,12 +13,12 @@ const DEFAULT_GAMELOG_PATH: &str =
 
 // Character color palette for multi-character visualization
 const CHARACTER_COLORS: &[(u8, u8, u8)] = &[
-    (0, 191, 255),    // Deep sky blue
-    (50, 205, 50),    // Lime green
-    (255, 215, 0),    // Gold
-    (255, 140, 0),    // Dark orange
-    (186, 85, 211),   // Medium orchid
-    (255, 105, 180),  // Hot pink
+    (0, 191, 255),   // Deep sky blue
+    (50, 205, 50),   // Lime green
+    (255, 215, 0),   // Gold
+    (255, 140, 0),   // Dark orange
+    (186, 85, 211),  // Medium orchid
+    (255, 105, 180), // Hot pink
 ];
 
 fn get_character_color(index: usize) -> egui::Color32 {
@@ -517,7 +517,7 @@ impl AbyssWatcherApp {
                         }
 
                         let char_line = Line::new(PlotPoints::from(char_points))
-                            .name(format!("{}", character))
+                            .name(character.to_string())
                             .color(get_character_color(char_idx))
                             .width(1.5);
                         plot_ui.line(char_line);
@@ -595,7 +595,8 @@ impl AbyssWatcherApp {
                     ui.add_space(4.0);
 
                     // Colored indicator
-                    let (rect, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
+                    let (rect, _) =
+                        ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
                     ui.painter().rect_filled(rect, 2.0, color);
 
                     ui.add_space(4.0);
@@ -619,9 +620,7 @@ impl AbyssWatcherApp {
                                     .outgoing_by_char_target
                                     .get(*character)
                                     .map(|m| {
-                                        m.iter()
-                                            .map(|(name, dps)| (name.as_str(), *dps))
-                                            .collect()
+                                        m.iter().map(|(name, dps)| (name.as_str(), *dps)).collect()
                                     })
                                     .unwrap_or_else(Vec::new);
                                 targets.sort_by(|a, b| b.1.total_cmp(&a.1));
@@ -721,7 +720,9 @@ impl eframe::App for AbyssWatcherApp {
                 egui::menu::bar(ui, |ui| {
                     ui.menu_button("View", |ui| {
                         ui.label("Opacity");
-                        ui.add(egui::Slider::new(&mut self.opacity, 0.2..=1.0).clamp_to_range(true));
+                        ui.add(
+                            egui::Slider::new(&mut self.opacity, 0.2..=1.0).clamp_to_range(true),
+                        );
                     });
 
                     ui.menu_button("Characters", |ui| {

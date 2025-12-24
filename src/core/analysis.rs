@@ -64,8 +64,10 @@ pub fn compute_dps_series(
     let mut incoming_by_source_damage: HashMap<EntityName, f32> = HashMap::new();
     let mut incoming_by_character_damage: HashMap<String, f32> = HashMap::new();
     let mut outgoing_by_character_damage: HashMap<String, f32> = HashMap::new();
-    let mut outgoing_by_char_weapon_damage: HashMap<String, HashMap<WeaponName, f32>> = HashMap::new();
-    let mut outgoing_by_char_target_damage: HashMap<String, HashMap<EntityName, f32>> = HashMap::new();
+    let mut outgoing_by_char_weapon_damage: HashMap<String, HashMap<WeaponName, f32>> =
+        HashMap::new();
+    let mut outgoing_by_char_target_damage: HashMap<String, HashMap<EntityName, f32>> =
+        HashMap::new();
 
     for (i, sample) in samples.iter_mut().enumerate() {
         let center_millis = start_millis + i as u64 * step_millis;
@@ -146,7 +148,8 @@ pub fn compute_dps_series(
                         outgoing_by_character_damage.remove(&event.character);
                     }
                 }
-                if let Some(char_weapons) = outgoing_by_char_weapon_damage.get_mut(&event.character) {
+                if let Some(char_weapons) = outgoing_by_char_weapon_damage.get_mut(&event.character)
+                {
                     if let Some(damage) = char_weapons.get_mut(&event.weapon) {
                         *damage -= event.damage;
                         if *damage <= 0.0 {
@@ -157,7 +160,8 @@ pub fn compute_dps_series(
                         outgoing_by_char_weapon_damage.remove(&event.character);
                     }
                 }
-                if let Some(char_targets) = outgoing_by_char_target_damage.get_mut(&event.character) {
+                if let Some(char_targets) = outgoing_by_char_target_damage.get_mut(&event.character)
+                {
                     if let Some(damage) = char_targets.get_mut(&event.target) {
                         *damage -= event.damage;
                         if *damage <= 0.0 {
@@ -303,7 +307,7 @@ mod tests {
         let a_weapons = sample.outgoing_by_char_weapon.get("PilotA").unwrap();
         assert!(a_weapons.contains_key("Lasers"));
         assert!(!a_weapons.contains_key("Missiles"));
-        
+
         let a_targets = sample.outgoing_by_char_target.get("PilotA").unwrap();
         assert!(a_targets.contains_key("Enemy1"));
         assert!(!a_targets.contains_key("Enemy2"));

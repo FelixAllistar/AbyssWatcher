@@ -5,6 +5,7 @@ use super::log_io;
 use super::model;
 use super::parser;
 
+#[allow(dead_code)]
 pub struct TrackedGamelog {
     tailer: log_io::LogTailer,
     parser: parser::LineParser,
@@ -34,6 +35,7 @@ impl TrackedGamelog {
         Ok(events)
     }
 
+    #[allow(dead_code)]
     pub fn path(&self) -> &Path {
         &self.path
     }

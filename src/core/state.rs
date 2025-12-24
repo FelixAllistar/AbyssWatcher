@@ -21,6 +21,7 @@ impl EngineState {
         self.sorted = false;
     }
 
+    #[allow(dead_code)]
     pub fn push_events(&mut self, mut new_events: Vec<CombatEvent>) {
         if new_events.is_empty() {
             return;
@@ -29,10 +30,12 @@ impl EngineState {
         self.sorted = false;
     }
 
+    #[allow(dead_code)]
     pub fn events(&self) -> &[CombatEvent] {
         &self.events
     }
 
+    #[allow(dead_code)]
     pub fn total_damage(&self) -> f32 {
         self.events
             .iter()

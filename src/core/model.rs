@@ -30,6 +30,7 @@ pub struct DpsSample {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct FightSummary {
     pub start: Duration,
     pub end: Duration,

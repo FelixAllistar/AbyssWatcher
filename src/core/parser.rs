@@ -70,7 +70,7 @@ impl LineParser {
         if let Some(timestamp) = line
             .strip_prefix(SESSION_PREFIX)
             .map(str::trim)
-            .and_then(|value| NaiveDateTime::parse_from_str(value, &TIMESTAMP_FMT).ok())
+            .and_then(|value| NaiveDateTime::parse_from_str(value, TIMESTAMP_FMT).ok())
         {
             self.base_time = Some(timestamp);
         }
@@ -104,15 +104,14 @@ fn determine_direction(lower_body: &str) -> Option<DamageDirection> {
 fn extract_timestamp(line: &str) -> Option<NaiveDateTime> {
     let first_section = line.split(']').next()?;
     let timestamp_text = first_section.trim_start_matches('[').trim();
-    NaiveDateTime::parse_from_str(timestamp_text, &TIMESTAMP_FMT).ok()
+    NaiveDateTime::parse_from_str(timestamp_text, TIMESTAMP_FMT).ok()
 }
 
 fn strip_tags(value: &str) -> String {
     let cleaned = TAG_RE.replace_all(value, "");
     cleaned
         .replace("&nbsp;", " ")
-        .replace('\r', " ")
-        .replace('\n', " ")
+        .replace(['\r', '\n'], " ")
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
@@ -149,7 +148,7 @@ fn split_entities_and_weapon(
             }
 
             let parts: Vec<_> = text.split(" - ").collect();
-            let target = parts.get(0)?.trim();
+            let target = parts.first()?.trim();
 
             // When weapon types are disabled in logs, the pattern is:
             //   "<damage> to <target> - <quality>"
@@ -174,7 +173,7 @@ fn split_entities_and_weapon(
             }
 
             let parts: Vec<_> = text.split(" - ").collect();
-            let source = parts.get(0)?.trim();
+            let source = parts.first()?.trim();
 
             // Same logic as outgoing: if we only see
             //   "<damage> from <source> - <quality>"
@@ -280,8 +279,7 @@ mod tests {
         let mut parser = LineParser::new();
         let _ = parser.parse_line("Session Started: 2025.12.04 09:57:00", "You");
 
-        let line =
-            "[ 2025.12.04 09:57:35 ] (combat) 44 from Guristas Heavy Missile Battery - Hits";
+        let line = "[ 2025.12.04 09:57:35 ] (combat) 44 from Guristas Heavy Missile Battery - Hits";
 
         let event = parser.parse_line(line, "You").expect("should parse");
 
@@ -299,7 +297,9 @@ mod tests {
         // Skip calling Session Started
 
         let line = "[ 2025.12.04 09:57:35 ] (combat) 127 to Snarecaster Tessella - Grazes";
-        let event = parser.parse_line(line, "You").expect("should parse even without session prefix");
+        let event = parser
+            .parse_line(line, "You")
+            .expect("should parse even without session prefix");
 
         assert_eq!(event.timestamp.as_secs(), 0); // First event should be t=0 if no session start
         assert_eq!(event.damage, 127.0);
@@ -308,13 +308,15 @@ mod tests {
     #[test]
     fn handles_relative_timestamps_after_missing_session_start() {
         let mut parser = LineParser::new();
-        
+
         let line1 = "[ 2025.12.04 09:57:35 ] (combat) 100 to Target A - Hits";
         let line2 = "[ 2025.12.04 09:57:45 ] (combat) 100 to Target B - Hits";
-        
+
         let _ = parser.parse_line(line1, "You");
-        let event2 = parser.parse_line(line2, "You").expect("should parse line 2");
-        
+        let event2 = parser
+            .parse_line(line2, "You")
+            .expect("should parse line 2");
+
         assert_eq!(event2.timestamp.as_secs(), 10);
     }
 }

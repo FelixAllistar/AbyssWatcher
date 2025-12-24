@@ -7,6 +7,7 @@ use std::time::SystemTime;
 use super::model::CombatEvent;
 use super::parser;
 
+#[allow(dead_code)]
 pub struct LogTailer {
     file: File,
     position: u64,
@@ -47,6 +48,7 @@ impl LogTailer {
         Ok(lines)
     }
 
+    #[allow(dead_code)]
     pub fn path(&self) -> &Path {
         &self.path
     }
@@ -56,6 +58,7 @@ pub struct CharacterLog {
     pub character: String,
     pub path: PathBuf,
     pub last_modified: SystemTime,
+    #[allow(dead_code)]
     pub file_size: u64,
 }
 
@@ -124,6 +127,7 @@ pub fn scan_gamelogs_dir(dir: impl AsRef<Path>) -> io::Result<Vec<CharacterLog>>
     Ok(logs)
 }
 
+#[allow(dead_code)]
 pub fn read_full_lines(path: impl AsRef<Path>) -> io::Result<Vec<String>> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
@@ -137,6 +141,7 @@ pub fn read_full_lines(path: impl AsRef<Path>) -> io::Result<Vec<String>> {
     Ok(lines)
 }
 
+#[allow(dead_code)]
 pub fn read_full_events(path: impl AsRef<Path>) -> io::Result<Vec<CombatEvent>> {
     let lines = read_full_lines(path)?;
     let mut events = Vec::new();

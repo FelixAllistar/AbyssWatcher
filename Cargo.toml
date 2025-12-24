@@ -17,7 +17,8 @@ regex = "1.5.5"
 eframe = { version = "0.27", default-features = true }
 egui_plot = "0.27.2"
 
-
+[dev-dependencies]
+tempfile = "3.3"
 
 [features]
 default = []

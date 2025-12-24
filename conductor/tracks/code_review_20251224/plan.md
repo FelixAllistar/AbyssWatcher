@@ -23,9 +23,9 @@ This phase addresses the issues found during the audit and improves the overall 
   - [x] Sub-task: Write Tests for State
   - [x] Sub-task: Improve State Implementation
     - Refactor `src/core/state.rs` to better handle multi-character data.
-- [ ] Task: Refactor UI Components
+- [~] Task: Refactor UI Components
   - [ ] Sub-task: Write Tests for UI Logic (where possible) or separate logic from view.
-  - [ ] Sub-task: Clean up `overlay_egui.rs`
+  - [x] Sub-task: Clean up `overlay_egui.rs` [bbbf91a]
     - Modularize UI components if the file is too large.
     - Ensure dynamic character switching works smoothly.
 - [ ] Task: Conductor - User Manual Verification 'Refactoring and Cleanup' (Protocol in workflow.md)
@@ -33,12 +33,11 @@ This phase addresses the issues found during the audit and improves the overall 
 ## Phase 3: Stabilization and Verification
 This phase focuses on verifying the fixes and ensuring the application is stable for production use.
 
-- [ ] Task: End-to-End Testing of Multi-Character Support
-  - [ ] Sub-task: Create Simulation Test
-    - Create a test harness or script that simulates multiple log files being written to simultaneously.
-  - [ ] Sub-task: Verify App Behavior
+- [x] Task: End-to-End Testing of Multi-Character Support
+  - [x] Sub-task: Create Simulation Test
+  - [x] Sub-task: Verify App Behavior
     - Run the app against the simulation and verify that the UI updates correctly for all "characters".
-- [ ] Task: Final Polish and Documentation
+- [x] Task: Final Polish and Documentation
   - Run `cargo fmt` and `cargo clippy`.
   - Update `README.md` if architecture changed significantly.
 - [ ] Task: Conductor - User Manual Verification 'Stabilization and Verification' (Protocol in workflow.md)
