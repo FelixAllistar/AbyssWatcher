@@ -27,13 +27,7 @@ impl LineParser {
         }
 
         if trimmed.starts_with(SESSION_PREFIX) {
-            if let Some(timestamp) = trimmed
-                .strip_prefix(SESSION_PREFIX)
-                .map(str::trim)
-                .and_then(|value| NaiveDateTime::parse_from_str(value, &TIMESTAMP_FMT).ok())
-            {
-                self.base_time = Some(timestamp);
-            }
+            self.parse_session_start(trimmed);
             return None;
         }
 
@@ -42,25 +36,15 @@ impl LineParser {
         }
 
         let timestamp = extract_timestamp(trimmed)?;
-        let body = trimmed
-            .split("(combat)")
-            .nth(1)
-            .map(str::trim)
-            .unwrap_or_default();
-        let cleaned_body = strip_tags(body);
+        let body = extract_body(trimmed);
+        let cleaned_body = strip_tags(&body);
         let lower = cleaned_body.to_ascii_lowercase();
 
         if lower.contains("remote armor repaired") {
             return None;
         }
 
-        let direction = if lower.contains(" to ") {
-            DamageDirection::Outgoing
-        } else if lower.contains(" from ") {
-            DamageDirection::Incoming
-        } else {
-            return None;
-        };
+        let direction = determine_direction(&lower)?;
 
         let (damage, remainder) = split_damage_body(&cleaned_body)?;
         let (source_entity, target_entity, weapon) =
@@ -82,10 +66,38 @@ impl LineParser {
         })
     }
 
+    fn parse_session_start(&mut self, line: &str) {
+        if let Some(timestamp) = line
+            .strip_prefix(SESSION_PREFIX)
+            .map(str::trim)
+            .and_then(|value| NaiveDateTime::parse_from_str(value, &TIMESTAMP_FMT).ok())
+        {
+            self.base_time = Some(timestamp);
+        }
+    }
+
     fn ensure_base_time(&mut self, timestamp: NaiveDateTime) {
         if self.base_time.is_none() {
             self.base_time = Some(timestamp);
         }
+    }
+}
+
+fn extract_body(line: &str) -> String {
+    line.split("(combat)")
+        .nth(1)
+        .map(str::trim)
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn determine_direction(lower_body: &str) -> Option<DamageDirection> {
+    if lower_body.contains(" to ") {
+        Some(DamageDirection::Outgoing)
+    } else if lower_body.contains(" from ") {
+        Some(DamageDirection::Incoming)
+    } else {
+        None
     }
 }
 
@@ -279,5 +291,30 @@ mod tests {
         assert_eq!(event.target, "You");
         assert_eq!(event.weapon, "");
         assert_eq!(event.character, "You");
+    }
+
+    #[test]
+    fn handles_missing_session_started_line_gracefully() {
+        let mut parser = LineParser::new();
+        // Skip calling Session Started
+
+        let line = "[ 2025.12.04 09:57:35 ] (combat) 127 to Snarecaster Tessella - Grazes";
+        let event = parser.parse_line(line, "You").expect("should parse even without session prefix");
+
+        assert_eq!(event.timestamp.as_secs(), 0); // First event should be t=0 if no session start
+        assert_eq!(event.damage, 127.0);
+    }
+
+    #[test]
+    fn handles_relative_timestamps_after_missing_session_start() {
+        let mut parser = LineParser::new();
+        
+        let line1 = "[ 2025.12.04 09:57:35 ] (combat) 100 to Target A - Hits";
+        let line2 = "[ 2025.12.04 09:57:45 ] (combat) 100 to Target B - Hits";
+        
+        let _ = parser.parse_line(line1, "You");
+        let event2 = parser.parse_line(line2, "You").expect("should parse line 2");
+        
+        assert_eq!(event2.timestamp.as_secs(), 10);
     }
 }
