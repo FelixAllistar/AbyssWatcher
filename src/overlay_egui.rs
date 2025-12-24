@@ -332,159 +332,8 @@ impl AbyssWatcherApp {
     fn draw_dps(&mut self, ui: &mut egui::Ui) {
         self.poll_engine();
 
-        ui.horizontal(|ui| {
-            let (out_dps, in_dps, peak_out, peak_in) = if let Some(sample) = self.dps_samples.last()
-            {
-                let current_top_out = sample
-                    .outgoing_by_target
-                    .values()
-                    .fold(0.0_f32, |acc, v| acc.max(*v));
-                let current_top_in = sample
-                    .incoming_by_source
-                    .values()
-                    .fold(0.0_f32, |acc, v| acc.max(*v));
-
-                self.peak_out_dps = self.peak_out_dps.max(current_top_out);
-                self.peak_in_dps = self.peak_in_dps.max(current_top_in);
-
-                (
-                    sample.outgoing_dps,
-                    sample.incoming_dps,
-                    self.peak_out_dps,
-                    self.peak_in_dps,
-                )
-            } else {
-                (0.0, 0.0, 0.0, 0.0)
-            };
-
-            ui.label(format!("Out: {:.1}", out_dps));
-            ui.label(format!("In: {:.1}", in_dps));
-            ui.label(format!("Peak Out: {:.1}", peak_out));
-            ui.label(format!("Peak In: {:.1}", peak_in));
-        });
-
-        // DPS history chart using egui::plot
-        if !self.dps_samples.is_empty() {
-            let max_points = 120usize;
-            let len = self.dps_samples.len();
-            let start = len.saturating_sub(max_points);
-            let slice = &self.dps_samples[start..];
-
-            let window_secs_f = self.dps_window_secs.max(1) as f64;
-
-            let mut out_points = Vec::with_capacity(slice.len());
-            let mut in_points = Vec::with_capacity(slice.len());
-
-            let last_time = slice.last().map(|s| s.time.as_secs_f64()).unwrap_or(0.0);
-
-            for sample in slice {
-                let t_rel = sample.time.as_secs_f64() - last_time; // 0 at "now", negative to the left
-                out_points.push([t_rel, sample.outgoing_dps as f64]);
-                in_points.push([t_rel, sample.incoming_dps as f64]);
-            }
-
-            // Use session peaks to define a stable Y range for the plot,
-            // add some headroom so the graph doesn't hug the top edge,
-            // then round up to a "nice" value (50/100/etc).
-            let peak_max = self.peak_out_dps.max(self.peak_in_dps).max(10.0);
-            let with_headroom = (peak_max * 1.15).max(10.0);
-            self.display_max_dps = nice_rounded_max(with_headroom);
-
-            let out_line = Line::new(PlotPoints::from(out_points))
-                .name("Outgoing DPS")
-                .color(egui::Color32::from_rgb(0, 191, 255));
-            let in_line = Line::new(PlotPoints::from(in_points))
-                .name("Incoming DPS")
-                .color(egui::Color32::from_rgb(255, 64, 64));
-
-            ui.add_space(4.0);
-            let plot_resp = Plot::new("dps_history")
-                .height(140.0)
-                .set_margin_fraction(egui::vec2(0.0, 0.0))
-                .y_axis_width(3)
-                // We draw numeric labels ourselves; keep grid only.
-                .show_axes(egui::Vec2b::new(false, false))
-                .show_grid(egui::Vec2b::new(true, true))
-                .auto_bounds(egui::Vec2b::new(false, false))
-                .allow_drag(false)
-                .allow_boxed_zoom(false)
-                .allow_scroll(false)
-                .allow_zoom(false)
-                .show(ui, |plot_ui| {
-                    let bounds = PlotBounds::from_min_max(
-                        [-window_secs_f, 0.0],
-                        [0.0, self.display_max_dps.max(1.0) as f64],
-                    );
-                    plot_ui.set_plot_bounds(bounds);
-                    plot_ui.line(out_line);
-                    plot_ui.line(in_line);
-                    
-                    // Draw per-character lines
-                    if let Some(latest_sample) = self.dps_samples.last() {
-                        let characters: Vec<_> = latest_sample.outgoing_by_character.keys().collect();
-                        
-                        for (char_idx, character) in characters.iter().enumerate() {
-                            let mut char_points = Vec::with_capacity(slice.len());
-                            
-                            for sample in slice {
-                                let t_rel = sample.time.as_secs_f64() - last_time;
-                                let char_dps = sample.outgoing_by_character
-                                    .get(*character)
-                                    .copied()
-                                    .unwrap_or(0.0) as f64;
-                                char_points.push([t_rel, char_dps]);
-                            }
-                            
-                            let char_line = Line::new(PlotPoints::from(char_points))
-                                .name(format!("{}", character))
-                                .color(get_character_color(char_idx))
-                                .width(1.5);
-                            plot_ui.line(char_line);
-                        }
-                    }
-                });
-
-            // Custom axis labels: X on bottom (seconds relative to now), Y on left (DPS).
-            let transform = plot_resp.transform;
-            let frame = *transform.frame();
-            let text_color = ui.visuals().strong_text_color();
-            let font_id = egui::TextStyle::Body.resolve(ui.style());
-            let painter = ui.painter();
-
-            // X-axis ticks: 0 (now) and negative seconds at regular intervals,
-            // drawn just below the plot frame.
-            let x_min = -window_secs_f;
-            let x_step = (window_secs_f / 3.0).max(1.0);
-            let mut x = 0.0;
-            while x >= x_min {
-                let pos = transform.position_from_point(&PlotPoint::new(x, 0.0));
-                let label = format!("{:.0}", x);
-                painter.text(
-                    egui::pos2(pos.x, frame.bottom() + 4.0),
-                    egui::Align2::CENTER_TOP,
-                    label,
-                    font_id.clone(),
-                    text_color,
-                );
-                x -= x_step;
-            }
-
-            // Y-axis ticks: 0, 1/3, 2/3, and peak, drawn just to the left of the plot frame.
-            let y_max = self.display_max_dps.max(1.0);
-            let y_step = y_max / 4.0;
-            for i in 0..=4 {
-                let value = y_step * i as f32;
-                let pos = transform.position_from_point(&PlotPoint::new(0.0, value as f64));
-                let label = format!("{:.0}", value);
-                painter.text(
-                    egui::pos2(frame.left() - 14.0, pos.y),
-                    egui::Align2::RIGHT_CENTER,
-                    label,
-                    font_id.clone(),
-                    text_color,
-                );
-            }
-        }
+        self.draw_dps_summary(ui);
+        self.draw_dps_plot(ui);
 
         // Detailed targets / incoming / weapon lists based on latest sample
         if let Some(sample) = self.dps_samples.last() {
@@ -554,49 +403,210 @@ impl AbyssWatcherApp {
         // Collapsible character breakdown
         self.draw_character_breakdown(ui);
     }
-    
+
+    fn draw_dps_summary(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            let (out_dps, in_dps, peak_out, peak_in) = if let Some(sample) = self.dps_samples.last()
+            {
+                let current_top_out = sample
+                    .outgoing_by_target
+                    .values()
+                    .fold(0.0_f32, |acc, v| acc.max(*v));
+                let current_top_in = sample
+                    .incoming_by_source
+                    .values()
+                    .fold(0.0_f32, |acc, v| acc.max(*v));
+
+                self.peak_out_dps = self.peak_out_dps.max(current_top_out);
+                self.peak_in_dps = self.peak_in_dps.max(current_top_in);
+
+                (
+                    sample.outgoing_dps,
+                    sample.incoming_dps,
+                    self.peak_out_dps,
+                    self.peak_in_dps,
+                )
+            } else {
+                (0.0, 0.0, 0.0, 0.0)
+            };
+
+            ui.label(format!("Out: {:.1}", out_dps));
+            ui.label(format!("In: {:.1}", in_dps));
+            ui.label(format!("Peak Out: {:.1}", peak_out));
+            ui.label(format!("Peak In: {:.1}", peak_in));
+        });
+    }
+
+    fn draw_dps_plot(&mut self, ui: &mut egui::Ui) {
+        // DPS history chart using egui::plot
+        if self.dps_samples.is_empty() {
+            return;
+        }
+
+        let max_points = 120usize;
+        let len = self.dps_samples.len();
+        let start = len.saturating_sub(max_points);
+        let slice = &self.dps_samples[start..];
+
+        let window_secs_f = self.dps_window_secs.max(1) as f64;
+
+        let mut out_points = Vec::with_capacity(slice.len());
+        let mut in_points = Vec::with_capacity(slice.len());
+
+        let last_time = slice.last().map(|s| s.time.as_secs_f64()).unwrap_or(0.0);
+
+        for sample in slice {
+            let t_rel = sample.time.as_secs_f64() - last_time; // 0 at "now", negative to the left
+            out_points.push([t_rel, sample.outgoing_dps as f64]);
+            in_points.push([t_rel, sample.incoming_dps as f64]);
+        }
+
+        // Use session peaks to define a stable Y range for the plot,
+        // add some headroom so the graph doesn't hug the top edge,
+        // then round up to a "nice" value (50/100/etc).
+        let peak_max = self.peak_out_dps.max(self.peak_in_dps).max(10.0);
+        let with_headroom = (peak_max * 1.15).max(10.0);
+        self.display_max_dps = nice_rounded_max(with_headroom);
+
+        let out_line = Line::new(PlotPoints::from(out_points))
+            .name("Outgoing DPS")
+            .color(egui::Color32::from_rgb(0, 191, 255));
+        let in_line = Line::new(PlotPoints::from(in_points))
+            .name("Incoming DPS")
+            .color(egui::Color32::from_rgb(255, 64, 64));
+
+        ui.add_space(4.0);
+        let plot_resp = Plot::new("dps_history")
+            .height(140.0)
+            .set_margin_fraction(egui::vec2(0.0, 0.0))
+            .y_axis_width(3)
+            // We draw numeric labels ourselves; keep grid only.
+            .show_axes(egui::Vec2b::new(false, false))
+            .show_grid(egui::Vec2b::new(true, true))
+            .auto_bounds(egui::Vec2b::new(false, false))
+            .allow_drag(false)
+            .allow_boxed_zoom(false)
+            .allow_scroll(false)
+            .allow_zoom(false)
+            .show(ui, |plot_ui| {
+                let bounds = PlotBounds::from_min_max(
+                    [-window_secs_f, 0.0],
+                    [0.0, self.display_max_dps.max(1.0) as f64],
+                );
+                plot_ui.set_plot_bounds(bounds);
+                plot_ui.line(out_line);
+                plot_ui.line(in_line);
+
+                // Draw per-character lines
+                if let Some(latest_sample) = self.dps_samples.last() {
+                    let mut characters: Vec<_> =
+                        latest_sample.outgoing_by_character.keys().collect();
+                    characters.sort();
+
+                    for (char_idx, character) in characters.iter().enumerate() {
+                        let mut char_points = Vec::with_capacity(slice.len());
+
+                        for sample in slice {
+                            let t_rel = sample.time.as_secs_f64() - last_time;
+                            let char_dps = sample
+                                .outgoing_by_character
+                                .get(*character)
+                                .copied()
+                                .unwrap_or(0.0) as f64;
+                            char_points.push([t_rel, char_dps]);
+                        }
+
+                        let char_line = Line::new(PlotPoints::from(char_points))
+                            .name(format!("{}", character))
+                            .color(get_character_color(char_idx))
+                            .width(1.5);
+                        plot_ui.line(char_line);
+                    }
+                }
+            });
+
+        // Custom axis labels: X on bottom (seconds relative to now), Y on left (DPS).
+        let transform = plot_resp.transform;
+        let frame = *transform.frame();
+        let text_color = ui.visuals().strong_text_color();
+        let font_id = egui::TextStyle::Body.resolve(ui.style());
+        let painter = ui.painter();
+
+        // X-axis ticks: 0 (now) and negative seconds at regular intervals,
+        // drawn just below the plot frame.
+        let x_min = -window_secs_f;
+        let x_step = (window_secs_f / 3.0).max(1.0);
+        let mut x = 0.0;
+        while x >= x_min {
+            let pos = transform.position_from_point(&PlotPoint::new(x, 0.0));
+            let label = format!("{:.0}", x);
+            painter.text(
+                egui::pos2(pos.x, frame.bottom() + 4.0),
+                egui::Align2::CENTER_TOP,
+                label,
+                font_id.clone(),
+                text_color,
+            );
+            x -= x_step;
+        }
+
+        // Y-axis ticks: 0, 1/3, 2/3, and peak, drawn just to the left of the plot frame.
+        let y_max = self.display_max_dps.max(1.0);
+        let y_step = y_max / 4.0;
+        for i in 0..=4 {
+            let value = y_step * i as f32;
+            let pos = transform.position_from_point(&PlotPoint::new(0.0, value as f64));
+            let label = format!("{:.0}", value);
+            painter.text(
+                egui::pos2(frame.left() - 14.0, pos.y),
+                egui::Align2::RIGHT_CENTER,
+                label,
+                font_id.clone(),
+                text_color,
+            );
+        }
+    }
+
     fn draw_character_breakdown(&mut self, ui: &mut egui::Ui) {
         if let Some(sample) = self.dps_samples.last() {
             if sample.outgoing_by_character.is_empty() {
                 return;
             }
-            
+
             ui.add_space(16.0);
             ui.separator();
             ui.label("Character Breakdown");
             ui.add_space(8.0);
-            
+
             // Sort characters by current DPS (descending)
             let mut char_dps: Vec<_> = sample.outgoing_by_character.iter().collect();
             char_dps.sort_by(|a, b| b.1.total_cmp(a.1));
-            
+
             for (char_idx, (character, &dps)) in char_dps.iter().enumerate() {
-                let is_expanded = self.character_sections_expanded
+                let is_expanded = self
+                    .character_sections_expanded
                     .entry(character.to_string())
                     .or_insert(true);
-                
+
                 let header_text = format!("{}  ({:.1} DPS)", character, dps);
                 let color = get_character_color(char_idx);
-                
+
                 ui.horizontal(|ui| {
                     ui.add_space(4.0);
-                    
+
                     // Colored indicator
-                    let (rect, _) = ui.allocate_exact_size(
-                        egui::vec2(12.0, 12.0),
-                        egui::Sense::hover(),
-                    );
+                    let (rect, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
                     ui.painter().rect_filled(rect, 2.0, color);
-                    
+
                     ui.add_space(4.0);
-                    
+
                     // Collapsible header
                     let header_response = ui.selectable_label(false, header_text);
                     if header_response.clicked() {
                         *is_expanded = !*is_expanded;
                     }
                 });
-                
+
                 if *is_expanded {
                     ui.indent(character, |ui| {
                         ui.horizontal(|ui| {
@@ -604,13 +614,18 @@ impl AbyssWatcherApp {
                             ui.vertical(|ui| {
                                 ui.label("Top Targets:");
                                 ui.add_space(2.0);
-                                
-                                let mut targets: Vec<_> = sample.outgoing_by_char_target
+
+                                let mut targets: Vec<_> = sample
+                                    .outgoing_by_char_target
                                     .get(*character)
-                                    .map(|m| m.iter().map(|(name, dps)| (name.as_str(), *dps)).collect())
+                                    .map(|m| {
+                                        m.iter()
+                                            .map(|(name, dps)| (name.as_str(), *dps))
+                                            .collect()
+                                    })
                                     .unwrap_or_else(Vec::new);
                                 targets.sort_by(|a, b| b.1.total_cmp(&a.1));
-                                
+
                                 for (name, target_dps) in targets.iter().take(3) {
                                     ui.label(format!("  {} ({:.1})", name, target_dps));
                                 }
@@ -618,20 +633,26 @@ impl AbyssWatcherApp {
                                     ui.label("  None");
                                 }
                             });
-                            
+
                             ui.add_space(16.0);
-                            
-                            // Top weapons  
+
+                            // Top weapons
                             ui.vertical(|ui| {
                                 ui.label("Top Weapons:");
                                 ui.add_space(2.0);
-                                
-                                let mut weapons: Vec<_> = sample.outgoing_by_char_weapon
+
+                                let mut weapons: Vec<_> = sample
+                                    .outgoing_by_char_weapon
                                     .get(*character)
-                                    .map(|m| m.iter().filter(|(name, _)| !name.is_empty()).map(|(name, dps)| (name.as_str(), *dps)).collect())
+                                    .map(|m| {
+                                        m.iter()
+                                            .filter(|(name, _)| !name.is_empty())
+                                            .map(|(name, dps)| (name.as_str(), *dps))
+                                            .collect()
+                                    })
                                     .unwrap_or_else(Vec::new);
                                 weapons.sort_by(|a, b| b.1.total_cmp(&a.1));
-                                
+
                                 for (name, weapon_dps) in weapons.iter().take(3) {
                                     ui.label(format!("  {} ({:.1})", name, weapon_dps));
                                 }
@@ -642,7 +663,7 @@ impl AbyssWatcherApp {
                         });
                     });
                 }
-                
+
                 ui.add_space(4.0);
             }
         }
@@ -700,9 +721,7 @@ impl eframe::App for AbyssWatcherApp {
                 egui::menu::bar(ui, |ui| {
                     ui.menu_button("View", |ui| {
                         ui.label("Opacity");
-                        ui.add(
-                            egui::Slider::new(&mut self.opacity, 0.2..=1.0).clamp_to_range(true),
-                        );
+                        ui.add(egui::Slider::new(&mut self.opacity, 0.2..=1.0).clamp_to_range(true));
                     });
 
                     ui.menu_button("Characters", |ui| {
