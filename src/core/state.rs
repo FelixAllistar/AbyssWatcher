@@ -21,6 +21,14 @@ impl EngineState {
         self.sorted = false;
     }
 
+    pub fn push_events(&mut self, mut new_events: Vec<CombatEvent>) {
+        if new_events.is_empty() {
+            return;
+        }
+        self.events.append(&mut new_events);
+        self.sorted = false;
+    }
+
     pub fn events(&self) -> &[CombatEvent] {
         &self.events
     }
@@ -40,5 +48,48 @@ impl EngineState {
             self.sorted = true;
         }
         analysis::compute_dps_series(&self.events, window, end)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::model::CombatEvent;
+
+    fn make_event(timestamp_secs: u64, character: &str) -> CombatEvent {
+        CombatEvent {
+            timestamp: Duration::from_secs(timestamp_secs),
+            source: "Source".to_string(),
+            target: "Target".to_string(),
+            weapon: "Weapon".to_string(),
+            damage: 100.0,
+            incoming: false,
+            character: character.to_string(),
+        }
+    }
+
+    #[test]
+    fn engine_state_sorts_events_before_analysis() {
+        let mut state = EngineState::new();
+        state.push_event(make_event(10, "A"));
+        state.push_event(make_event(5, "A"));
+
+        assert!(!state.sorted);
+        let _ = state.dps_series(Duration::from_secs(1), Duration::from_secs(10));
+        assert!(state.sorted);
+        assert_eq!(state.events[0].timestamp.as_secs(), 5);
+        assert_eq!(state.events[1].timestamp.as_secs(), 10);
+    }
+
+    #[test]
+    fn total_damage_sums_outgoing_only() {
+        let mut state = EngineState::new();
+        state.push_event(make_event(1, "A")); // Outgoing 100
+        state.push_event(CombatEvent {
+            incoming: true,
+            ..make_event(2, "A")
+        }); // Incoming 100
+
+        assert_eq!(state.total_damage(), 100.0);
     }
 }
