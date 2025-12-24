@@ -78,6 +78,7 @@ impl LineParser {
             weapon,
             damage,
             incoming: matches!(direction, DamageDirection::Incoming),
+            character: source.to_string(),
         })
     }
 
@@ -199,6 +200,7 @@ mod tests {
         assert_eq!(event.source, "You");
         assert_eq!(event.target, "Starving Damavik");
         assert_eq!(event.weapon, "Small Focused Beam Laser II");
+        assert_eq!(event.character, "You");
         assert!(event.timestamp.as_secs() > 0);
     }
 
@@ -239,6 +241,7 @@ mod tests {
         assert_eq!(event.source, "Guristas Heavy Missile Battery");
         assert_eq!(event.target, "You");
         assert_eq!(event.weapon, "Inferno Heavy Missile");
+        assert_eq!(event.character, "You");
     }
 
     #[test]
@@ -257,6 +260,7 @@ mod tests {
         assert_eq!(event.source, "You");
         assert_eq!(event.target, "Snarecaster Tessella");
         assert_eq!(event.weapon, "");
+        assert_eq!(event.character, "You");
     }
 
     #[test]
@@ -274,5 +278,6 @@ mod tests {
         assert_eq!(event.source, "Guristas Heavy Missile Battery");
         assert_eq!(event.target, "You");
         assert_eq!(event.weapon, "");
+        assert_eq!(event.character, "You");
     }
 }

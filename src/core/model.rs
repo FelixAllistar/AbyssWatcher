@@ -12,6 +12,7 @@ pub struct CombatEvent {
     pub weapon: WeaponName,
     pub damage: f32,
     pub incoming: bool,
+    pub character: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -22,6 +23,10 @@ pub struct DpsSample {
     pub outgoing_by_weapon: HashMap<WeaponName, f32>,
     pub outgoing_by_target: HashMap<EntityName, f32>,
     pub incoming_by_source: HashMap<EntityName, f32>,
+    pub outgoing_by_character: HashMap<String, f32>,
+    pub incoming_by_character: HashMap<String, f32>,
+    pub outgoing_by_char_weapon: HashMap<String, HashMap<WeaponName, f32>>,
+    pub outgoing_by_char_target: HashMap<String, HashMap<EntityName, f32>>,
 }
 
 #[derive(Clone, Debug)]

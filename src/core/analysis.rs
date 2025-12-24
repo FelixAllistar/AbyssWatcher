@@ -47,6 +47,10 @@ pub fn compute_dps_series(
             outgoing_by_weapon: HashMap::<WeaponName, f32>::new(),
             outgoing_by_target: HashMap::<EntityName, f32>::new(),
             incoming_by_source: HashMap::<EntityName, f32>::new(),
+            outgoing_by_character: HashMap::<String, f32>::new(),
+            incoming_by_character: HashMap::<String, f32>::new(),
+            outgoing_by_char_weapon: HashMap::<String, HashMap<WeaponName, f32>>::new(),
+            outgoing_by_char_target: HashMap::<String, HashMap<EntityName, f32>>::new(),
         });
     }
 
@@ -58,6 +62,10 @@ pub fn compute_dps_series(
     let mut outgoing_by_weapon_damage: HashMap<WeaponName, f32> = HashMap::new();
     let mut outgoing_by_target_damage: HashMap<EntityName, f32> = HashMap::new();
     let mut incoming_by_source_damage: HashMap<EntityName, f32> = HashMap::new();
+    let mut incoming_by_character_damage: HashMap<String, f32> = HashMap::new();
+    let mut outgoing_by_character_damage: HashMap<String, f32> = HashMap::new();
+    let mut outgoing_by_char_weapon_damage: HashMap<String, HashMap<WeaponName, f32>> = HashMap::new();
+    let mut outgoing_by_char_target_damage: HashMap<String, HashMap<EntityName, f32>> = HashMap::new();
 
     for (i, sample) in samples.iter_mut().enumerate() {
         let center_millis = start_millis + i as u64 * step_millis;
@@ -72,12 +80,28 @@ pub fn compute_dps_series(
                 *incoming_by_source_damage
                     .entry(event.source.clone())
                     .or_insert(0.0) += event.damage;
+                *incoming_by_character_damage
+                    .entry(event.character.clone())
+                    .or_insert(0.0) += event.damage;
             } else {
                 outgoing_sum += event.damage;
                 *outgoing_by_weapon_damage
                     .entry(event.weapon.clone())
                     .or_insert(0.0) += event.damage;
                 *outgoing_by_target_damage
+                    .entry(event.target.clone())
+                    .or_insert(0.0) += event.damage;
+                *outgoing_by_character_damage
+                    .entry(event.character.clone())
+                    .or_insert(0.0) += event.damage;
+                *outgoing_by_char_weapon_damage
+                    .entry(event.character.clone())
+                    .or_default()
+                    .entry(event.weapon.clone())
+                    .or_insert(0.0) += event.damage;
+                *outgoing_by_char_target_damage
+                    .entry(event.character.clone())
+                    .or_default()
                     .entry(event.target.clone())
                     .or_insert(0.0) += event.damage;
             }
@@ -96,6 +120,12 @@ pub fn compute_dps_series(
                         incoming_by_source_damage.remove(&event.source);
                     }
                 }
+                if let Some(value) = incoming_by_character_damage.get_mut(&event.character) {
+                    *value -= event.damage;
+                    if *value <= 0.0 {
+                        incoming_by_character_damage.remove(&event.character);
+                    }
+                }
             } else {
                 outgoing_sum -= event.damage;
                 if let Some(value) = outgoing_by_weapon_damage.get_mut(&event.weapon) {
@@ -108,6 +138,34 @@ pub fn compute_dps_series(
                     *value -= event.damage;
                     if *value <= 0.0 {
                         outgoing_by_target_damage.remove(&event.target);
+                    }
+                }
+                if let Some(value) = outgoing_by_character_damage.get_mut(&event.character) {
+                    *value -= event.damage;
+                    if *value <= 0.0 {
+                        outgoing_by_character_damage.remove(&event.character);
+                    }
+                }
+                if let Some(char_weapons) = outgoing_by_char_weapon_damage.get_mut(&event.character) {
+                    if let Some(damage) = char_weapons.get_mut(&event.weapon) {
+                        *damage -= event.damage;
+                        if *damage <= 0.0 {
+                            char_weapons.remove(&event.weapon);
+                        }
+                    }
+                    if char_weapons.is_empty() {
+                        outgoing_by_char_weapon_damage.remove(&event.character);
+                    }
+                }
+                if let Some(char_targets) = outgoing_by_char_target_damage.get_mut(&event.character) {
+                    if let Some(damage) = char_targets.get_mut(&event.target) {
+                        *damage -= event.damage;
+                        if *damage <= 0.0 {
+                            char_targets.remove(&event.target);
+                        }
+                    }
+                    if char_targets.is_empty() {
+                        outgoing_by_char_target_damage.remove(&event.character);
                     }
                 }
             }
@@ -128,6 +186,38 @@ pub fn compute_dps_series(
         sample.incoming_by_source = incoming_by_source_damage
             .iter()
             .map(|(source, damage)| (source.clone(), damage / window_seconds))
+            .collect();
+        sample.outgoing_by_character = outgoing_by_character_damage
+            .iter()
+            .map(|(character, damage)| (character.clone(), damage / window_seconds))
+            .collect();
+        sample.incoming_by_character = incoming_by_character_damage
+            .iter()
+            .map(|(character, damage)| (character.clone(), damage / window_seconds))
+            .collect();
+        sample.outgoing_by_char_weapon = outgoing_by_char_weapon_damage
+            .iter()
+            .map(|(character, weapons)| {
+                (
+                    character.clone(),
+                    weapons
+                        .iter()
+                        .map(|(weapon, damage)| (weapon.clone(), damage / window_seconds))
+                        .collect(),
+                )
+            })
+            .collect();
+        sample.outgoing_by_char_target = outgoing_by_char_target_damage
+            .iter()
+            .map(|(character, targets)| {
+                (
+                    character.clone(),
+                    targets
+                        .iter()
+                        .map(|(target, damage)| (target.clone(), damage / window_seconds))
+                        .collect(),
+                )
+            })
             .collect();
     }
 
@@ -154,6 +244,7 @@ mod tests {
             weapon: "Test".to_string(),
             damage,
             incoming,
+            character: source.to_string(),
         }
     }
 
@@ -176,5 +267,54 @@ mod tests {
             samples[1].outgoing_dps > 0.0,
             "middle slot should also exist"
         );
+    }
+
+    #[test]
+    fn isolates_stats_per_character() {
+        let mut events = vec![
+            CombatEvent {
+                timestamp: Duration::from_secs(1),
+                source: "PilotA".to_string(),
+                target: "Enemy1".to_string(),
+                weapon: "Lasers".to_string(),
+                damage: 100.0,
+                incoming: false,
+                character: "PilotA".to_string(),
+            },
+            CombatEvent {
+                timestamp: Duration::from_secs(1),
+                source: "PilotB".to_string(),
+                target: "Enemy2".to_string(),
+                weapon: "Missiles".to_string(),
+                damage: 50.0,
+                incoming: false,
+                character: "PilotB".to_string(),
+            },
+        ];
+        events.sort_by_key(|event| event.timestamp.as_millis());
+
+        let samples = compute_dps_series(&events, Duration::from_secs(1), Duration::from_secs(1));
+        let sample = &samples[1]; // slot at t=1s
+
+        // Verify global totals
+        assert_eq!(sample.outgoing_dps, 150.0);
+
+        // Verify PilotA isolation
+        let a_weapons = sample.outgoing_by_char_weapon.get("PilotA").unwrap();
+        assert!(a_weapons.contains_key("Lasers"));
+        assert!(!a_weapons.contains_key("Missiles"));
+        
+        let a_targets = sample.outgoing_by_char_target.get("PilotA").unwrap();
+        assert!(a_targets.contains_key("Enemy1"));
+        assert!(!a_targets.contains_key("Enemy2"));
+
+        // Verify PilotB isolation
+        let b_weapons = sample.outgoing_by_char_weapon.get("PilotB").unwrap();
+        assert!(b_weapons.contains_key("Missiles"));
+        assert!(!b_weapons.contains_key("Lasers"));
+
+        let b_targets = sample.outgoing_by_char_target.get("PilotB").unwrap();
+        assert!(b_targets.contains_key("Enemy2"));
+        assert!(!b_targets.contains_key("Enemy1"));
     }
 }
