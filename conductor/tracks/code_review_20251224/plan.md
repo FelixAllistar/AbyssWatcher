@@ -19,10 +19,9 @@ This phase addresses the issues found during the audit and improves the overall 
 - [x] Task: Refactor Log Parsing Logic [f18d4af]
   - [x] Sub-task: Write Tests for Parser
   - [x] Sub-task: Improve Parser Implementation
-- [ ] Task: Refactor State Management
-  - [ ] Sub-task: Write Tests for State
-    - Create/Update tests in `src/core/state.rs` to verify thread safety and correctness.
-  - [ ] Sub-task: Improve State Implementation
+- [x] Task: Refactor State Management [cc1b63b]
+  - [x] Sub-task: Write Tests for State
+  - [x] Sub-task: Improve State Implementation
     - Refactor `src/core/state.rs` to better handle multi-character data.
 - [ ] Task: Refactor UI Components
   - [ ] Sub-task: Write Tests for UI Logic (where possible) or separate logic from view.
