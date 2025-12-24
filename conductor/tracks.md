@@ -4,5 +4,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [ ] Track: Code Review and Stabilization
+## [~] Track: Code Review and Stabilization
 *Link: [./conductor/tracks/code_review_20251224/](./conductor/tracks/code_review_20251224/)*
