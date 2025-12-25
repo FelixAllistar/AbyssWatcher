@@ -3,10 +3,10 @@
 ## Phase 1: Setup and Scaffolding
 This phase focuses on getting the build environment ready and establishing the project structure.
 
-- [ ] Task: Restructure Project for Dual Targets
+- [x] Task: Restructure Project for Dual Targets
   - Move `src/core` to a shared library module (or ensure it's accessible to both binaries).
   - Rename current `main.rs` to `bin/egui_app.rs` (or similar) or define multiple `[[bin]]` targets in `Cargo.toml`.
-- [ ] Task: Initialize Tauri
+- [x] Task: Initialize Tauri
   - Use `cargo tauri init` (or manual setup) to create the `src-tauri` directory.
   - Configure `tauri.conf.json` for "always on top", transparency, and window decorations.
   - Setup a minimal frontend (vanilla HTML/JS or a lightweight framework like Preact/React).

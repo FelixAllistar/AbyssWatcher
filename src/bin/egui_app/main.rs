@@ -1,4 +1,3 @@
-mod core;
 mod overlay_egui;
 
 fn main() {

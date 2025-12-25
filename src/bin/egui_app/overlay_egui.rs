@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime};
 
-use crate::core::{log_io, model, state, tracker};
+use abyss_watcher::core::{log_io, model, state, tracker};
 use eframe::{egui, NativeOptions};
 use egui_plot::{Line, Plot, PlotBounds, PlotPoint, PlotPoints};
 use serde::{Deserialize, Serialize};
@@ -122,7 +122,7 @@ pub fn run_overlay() {
 
     // Set explicit window title and icon.
     viewport_builder = viewport_builder.with_title("AbyssWatcher");
-    if let Ok(icon) = eframe::icon_data::from_png_bytes(include_bytes!("../AbyssWatcher.png")) {
+    if let Ok(icon) = eframe::icon_data::from_png_bytes(include_bytes!("../../../AbyssWatcher.png")) {
         viewport_builder = viewport_builder.with_icon(icon);
     }
 
