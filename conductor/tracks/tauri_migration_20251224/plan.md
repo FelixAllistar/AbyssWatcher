@@ -10,7 +10,7 @@ This phase focuses on getting the build environment ready and establishing the p
   - Use `cargo tauri init` (or manual setup) to create the `src-tauri` directory.
   - Configure `tauri.conf.json` for "always on top", transparency, and window decorations.
   - Setup a minimal frontend (vanilla HTML/JS or a lightweight framework like Preact/React).
-- [ ] Task: Conductor - User Manual Verification 'Setup and Scaffolding' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Setup and Scaffolding' (Protocol in workflow.md) [checkpoint: 2dcda02]
 
 ## Phase 2: Connecting Backend to Frontend
 This phase bridges the gap between the Rust log parser and the Webview.
