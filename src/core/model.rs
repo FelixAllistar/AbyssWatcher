@@ -1,10 +1,11 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
 
 pub type EntityName = String;
 pub type WeaponName = String;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CombatEvent {
     pub timestamp: Duration,
     pub source: EntityName,
@@ -15,7 +16,7 @@ pub struct CombatEvent {
     pub character: String,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct DpsSample {
     pub time: Duration,
     pub outgoing_dps: f32,
@@ -29,7 +30,7 @@ pub struct DpsSample {
     pub outgoing_by_char_target: HashMap<String, HashMap<EntityName, f32>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[allow(dead_code)]
 pub struct FightSummary {
     pub start: Duration,

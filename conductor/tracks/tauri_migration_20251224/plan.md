@@ -15,10 +15,10 @@ This phase focuses on getting the build environment ready and establishing the p
 ## Phase 2: Connecting Backend to Frontend
 This phase bridges the gap between the Rust log parser and the Webview.
 
-- [ ] Task: Create Tauri Commands/Events
+- [x] Task: Create Tauri Commands/Events
   - Implement a Tauri command to start the log watcher.
   - Use `tauri::Window::emit` to push `DpsSample` updates to the frontend.
-- [ ] Task: Wire up the Frontend
+- [x] Task: Wire up the Frontend
   - Write JavaScript to listen for the DPS events.
   - Update the DOM with the received data.
 - [ ] Task: Conductor - User Manual Verification 'Connecting Backend to Frontend' (Protocol in workflow.md)
