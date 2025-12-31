@@ -7,6 +7,7 @@ pub mod core {
     pub mod state;
     pub mod watcher;
     pub mod coordinator;
+    pub mod config;
     #[cfg(test)]
     pub mod sim_test;
     #[cfg(test)]
