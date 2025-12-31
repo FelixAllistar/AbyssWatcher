@@ -17,10 +17,11 @@ Connect the new modules to the Tauri backend.
 - [x] Task: Wire up Tauri Backend d5ed583
 - [x] Task: Conductor - User Manual Verification 'Integration'
 
-## Phase 3: Cleanup [~]
+## Phase 3: Cleanup [checkpoint: ca5d741]
 Polishing and verifying the new architecture.
 
-- [~] Task: Error Handling Audit
+- [x] Task: Error Handling Audit ca5d741
   - Scan the new modules for `unwrap()` and replace with `Result` or error logging.
-- [~] Task: Verify Refactor
+- [x] Task: Verify Refactor ca5d741
   - Run all tests to ensure no regressions.
+- [x] Task: Conductor - User Manual Verification 'Cleanup'
