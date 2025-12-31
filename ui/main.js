@@ -8,6 +8,15 @@ const activeListEl = document.getElementById("active-list");
 const logEl = document.getElementById("logs");
 const toggleBtn = document.getElementById("toggle-settings");
 
+// Settings Elements
+const toggleConfigBtn = document.getElementById("toggle-config");
+const settingsModal = document.getElementById("settings-modal");
+const logDirInput = document.getElementById("log-dir-input");
+const browseBtn = document.getElementById("browse-btn");
+const dpsWindowInput = document.getElementById("dps-window-input");
+const saveSettingsBtn = document.getElementById("save-settings");
+const cancelSettingsBtn = document.getElementById("cancel-settings");
+
 let characters = [];
 
 async function init() {
@@ -16,22 +25,74 @@ async function init() {
   // Toggle settings visibility
   toggleBtn.onclick = () => {
     selectionContainer.classList.toggle("hidden");
+    if (!selectionContainer.classList.contains("hidden")) {
+        settingsModal.classList.add("hidden");
+    }
   };
 
-  // 1. Get available characters
+  // Settings Logic
+  toggleConfigBtn.onclick = () => {
+      settingsModal.classList.toggle("hidden");
+      if (!settingsModal.classList.contains("hidden")) {
+          selectionContainer.classList.add("hidden");
+      }
+  };
+
+  browseBtn.onclick = async () => {
+      try {
+        const path = await invoke("pick_gamelog_dir");
+        if (path) {
+            logDirInput.value = path;
+        }
+      } catch (e) {
+          logToScreen("Error picking dir: " + e);
+      }
+  };
+
+  saveSettingsBtn.onclick = async () => {
+      const newSettings = {
+          gamelog_dir: logDirInput.value,
+          dps_window_seconds: parseInt(dpsWindowInput.value) || 5
+      };
+      try {
+          await invoke("save_settings", { settings: newSettings });
+          settingsModal.classList.add("hidden");
+          logToScreen("Settings saved!");
+          // Refresh characters as the directory might have changed
+          characters = await invoke("get_available_characters");
+          renderSelection();
+      } catch (e) {
+          logToScreen("Error saving: " + e);
+      }
+  };
+
+  cancelSettingsBtn.onclick = () => {
+      settingsModal.classList.add("hidden");
+  };
+
+  // 1. Load initial settings
+  try {
+    const settings = await invoke("get_settings");
+    logDirInput.value = settings.gamelog_dir;
+    dpsWindowInput.value = settings.dps_window_seconds;
+  } catch (e) {
+    logToScreen("Error loading settings: " + JSON.stringify(e));
+  }
+
+  // 2. Get available characters (using the loaded settings path)
   try {
     characters = await invoke("get_available_characters");
     renderSelection();
   } catch (e) {
-    logToScreen("Error: " + JSON.stringify(e));
+    logToScreen("Error getting chars: " + JSON.stringify(e));
   }
 
-  // 2. Listen for DPS updates
+  // 3. Listen for DPS updates
   await listen("dps-update", (event) => {
     updateUI(event.payload);
   });
 
-  // 3. Listen for backend logs
+  // 4. Listen for backend logs
   await listen("backend-log", (event) => {
     logToScreen(event.payload);
   });
