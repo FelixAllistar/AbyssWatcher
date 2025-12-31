@@ -11,7 +11,7 @@ Replace linear iteration with binary search.
   - Only iterate over events falling within `[now - window, now]`.
 - [ ] Task: Conductor - User Manual Verification 'Implementation' (Protocol in workflow.md)
 
-## Phase 2: Verification [~]
+## Phase 2: Verification [checkpoint: 00d2eba]
 Confirm correctness and performance.
 
 - [x] Task: Verify Correctness with existing tests 57494ac
