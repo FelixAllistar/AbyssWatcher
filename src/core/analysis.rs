@@ -54,8 +54,14 @@ pub fn compute_dps_series(
         });
     }
 
-    let mut start_idx: usize = 0;
-    let mut end_idx: usize = 0;
+    // Optimization: Find the starting point in the events list using binary search.
+    // We only care about events that could possibly contribute to the FIRST window in our series.
+    // The first sample is at `start_millis`. Its window is `[start_millis - window, start_millis]`.
+    let global_start_cutoff = Duration::from_millis(start_millis.saturating_sub(window_millis));
+    
+    // Find the index of the first event >= global_start_cutoff
+    let mut start_idx = events.partition_point(|e| e.timestamp < global_start_cutoff);
+    let mut end_idx = start_idx;
 
     let mut outgoing_sum = 0.0_f32;
     let mut incoming_sum = 0.0_f32;
