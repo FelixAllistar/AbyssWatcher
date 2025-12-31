@@ -1,6 +1,6 @@
 # Implementation Plan - Tauri Implementation Review
 
-## Phase 1: Backend Audit
+## Phase 1: Backend Audit [checkpoint: 671eedc]
 Review the Rust side of the Tauri application.
 
 - [x] Task: Audit Backend Watcher Efficiency 628aaf8
