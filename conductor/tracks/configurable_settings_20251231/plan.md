@@ -14,9 +14,9 @@ Expose functionality to the frontend.
 - [x] Task: Hot-Reload Logic 4b1c8f1
 - [x] Task: Conductor - User Manual Verification 'Tauri Commands'
 
-## Phase 3: Frontend UI [~]
+## Phase 3: Frontend UI [checkpoint: 7a55ab1]
 Build the settings interface.
 
-- [x] Task: Build Settings UI 7d79277
-- [x] Task: Connect UI to Backend 7d79277
+- [x] Task: Build Settings UI 7a55ab1
+- [x] Task: Connect UI to Backend 7a55ab1
 - [x] Task: Conductor - User Manual Verification 'Frontend UI'
