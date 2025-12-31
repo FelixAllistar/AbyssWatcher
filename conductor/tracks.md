@@ -4,5 +4,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [~] Track: Tauri Migration Prototype
-*Link: [./conductor/tracks/tauri_migration_20251224/](./conductor/tracks/tauri_migration_20251224/)*
+## [ ] Track: Tauri Implementation Review
+*Link: [./conductor/tracks/tauri_review_20251231/](./conductor/tracks/tauri_review_20251231/)*
