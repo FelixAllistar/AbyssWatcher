@@ -19,3 +19,13 @@
 - **Unused Assets:** `assets/main.css` and `assets/tailwind.css` are present in the project but NOT linked in `ui/index.html`. The app uses inline styles.
 - **Cleanup:** `main.js` sets up event listeners but does not capture the returned `unlisten` functions. This is acceptable for a single-page app that doesn't unmount components, but bad practice generally.
 - **Responsiveness:** CSS uses `clamp()` and flexbox correctly for window resizing.
+
+## Configuration & Security
+- **CSP (Content Security Policy):** Currently missing. This is a security layer that tells the browser engine which scripts and styles are allowed to run. Without it, if an attacker can inject HTML, they can run malicious scripts.
+    - *Risk:* Moderate. Since we only load local content, it's safer, but adding a CSP is a standard best practice.
+- **`withGlobalTauri`:** Currently set to `true`. This injects `window.__TAURI__` into the frontend.
+    - *Risk:* Low/Moderate. If an attacker can execute JS on your page (XSS), they get full access to the Rust backend APIs immediately. It is safer to use the isolation pattern or explicit imports, but for a local-only tool, this is often a trade-off made for development speed.
+
+## Reported Bugs
+- **Visual Artifacts ("Ghost Image"):** User reports ghosting when toggling UI elements.
+    - *Probable Cause:* The window is set to `"transparent": true` in `tauri.conf.json`. This often causes repainting issues on Linux/Windows compositors when the DOM changes significantly (like hiding a large container). It is unrelated to the `unlisten` issue.
