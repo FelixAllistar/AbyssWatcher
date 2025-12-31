@@ -30,4 +30,4 @@ This phase addresses the core reason for the migration: responsive layout.
   - Create a CSS Grid/Flexbox layout for the overlay.
   - Use viewport units (`vw`, `vh`) or `clamp()` for font sizing.
   - Verify that shrinking the window "squishes" the UI gracefully without breaking.
-- [ ] Task: Conductor - User Manual Verification 'UI Prototyping' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'UI Prototyping' (Protocol in workflow.md) [checkpoint: e4331b3]
