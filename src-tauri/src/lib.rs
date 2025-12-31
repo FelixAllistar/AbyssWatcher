@@ -25,13 +25,12 @@ fn save_settings(settings: Settings, state: State<'_, AppState>) -> Result<(), S
 }
 
 #[tauri::command]
-fn pick_gamelog_dir(app: tauri::AppHandle) -> Option<PathBuf> {
-    // Synchronous blocking dialog for simplicity, or we can make it async
-    // In Tauri v2, pick_folder is blocking if not awaited? 
-    // Actually, let's use the async version to avoid freezing the main thread if possible, 
-    // but the trait is usually blocking on desktop.
-    // The dialog plugin example suggests it can be blocking.
-    app.dialog().file().blocking_pick_folder().map(|d| d.into_path_buf())
+async fn pick_gamelog_dir(app: tauri::AppHandle) -> Result<Option<PathBuf>, String> {
+    // Async dialog to avoid freezing the main thread
+    match app.dialog().file().pick_folder().await {
+        Some(file_path) => file_path.into_path().map(Some).map_err(|e| e.to_string()),
+        None => Ok(None),
+    }
 }
 
 #[tauri::command]
