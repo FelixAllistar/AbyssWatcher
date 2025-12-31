@@ -15,10 +15,8 @@ Review the Rust side of the Tauri application.
 ## Phase 2: Frontend & Config Audit
 Review the Webview and Tauri configuration.
 
-- [ ] Task: Audit Frontend Implementation
-  - Review `ui/main.js` for proper initialization and state handling.
-  - Ensure CSS responsiveness covers extremely small window sizes.
-- [ ] Task: Audit Tauri Configuration
+- [x] Task: Audit Frontend Implementation 0699f15
+- [x] Task: Audit Tauri Configuration 0699f15
   - Review `tauri.conf.json` settings (e.g., `withGlobalTauri`).
   - Verify `capabilities/default.json` for least-privilege access.
 - [ ] Task: Conductor - User Manual Verification 'Frontend & Config Audit' (Protocol in workflow.md)
