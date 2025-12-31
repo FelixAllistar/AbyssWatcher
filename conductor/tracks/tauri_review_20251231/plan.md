@@ -21,7 +21,7 @@ Review the Webview and Tauri configuration.
   - Verify `capabilities/default.json` for least-privilege access.
 - [ ] Task: Conductor - User Manual Verification 'Frontend & Config Audit' (Protocol in workflow.md)
 
-## Phase 3: Consolidation [~]
+## Phase 3: Consolidation [checkpoint: 7bef2e2]
 Document findings and apply immediate low-risk fixes.
 
 - [x] Task: Generate Audit Report 70e989b
