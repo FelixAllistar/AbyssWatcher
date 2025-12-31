@@ -11,10 +11,10 @@ Replace linear iteration with binary search.
   - Only iterate over events falling within `[now - window, now]`.
 - [ ] Task: Conductor - User Manual Verification 'Implementation' (Protocol in workflow.md)
 
-## Phase 2: Verification
+## Phase 2: Verification [~]
 Confirm correctness and performance.
 
-- [ ] Task: Verify Correctness with existing tests
+- [~] Task: Verify Correctness with existing tests
   - Run the standard test suite to ensure no regression.
 - [ ] Task: Verify Performance with Stress Test
   - Run the stress test again to confirm the speedup.
