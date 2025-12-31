@@ -21,7 +21,7 @@ This phase bridges the gap between the Rust log parser and the Webview.
 - [x] Task: Wire up the Frontend
   - Write JavaScript to listen for the DPS events.
   - Update the DOM with the received data.
-- [ ] Task: Conductor - User Manual Verification 'Connecting Backend to Frontend' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Connecting Backend to Frontend' (Protocol in workflow.md) [checkpoint: aeef0d7]
 
 ## Phase 3: UI Prototyping (The "CSS" Part)
 This phase addresses the core reason for the migration: responsive layout.
