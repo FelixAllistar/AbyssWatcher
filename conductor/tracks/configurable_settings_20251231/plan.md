@@ -1,23 +1,17 @@
 # Implementation Plan - Configurable Settings
 
-## Phase 1: Backend Infrastructure
+## Phase 1: Backend Infrastructure [checkpoint: d19a861]
 Implement settings persistence and the dialog plugin.
 
 - [x] Task: Add Dialog Plugin 4e223b2
 - [x] Task: Implement Settings Manager d19a861
-  - Create `src/core/config.rs` with `Settings` struct and `load`/`save` methods.
-  - Integrate persistence in `src-tauri/src/lib.rs` (load on startup).
-- [ ] Task: Conductor - User Manual Verification 'Backend Infrastructure'
+- [x] Task: Conductor - User Manual Verification 'Backend Infrastructure'
 
-## Phase 2: Tauri Commands & Integration
+## Phase 2: Tauri Commands & Integration [~]
 Expose functionality to the frontend.
 
-- [ ] Task: Implement Config Commands
-  - Add Tauri commands: `get_settings`, `save_settings`, `pick_gamelog_dir`.
-  - `pick_gamelog_dir` should use the dialog plugin to return a path string.
-- [ ] Task: Hot-Reload Logic
-  - Ensure that saving settings updates the running `Coordinator` (changes the watched directory).
-- [ ] Task: Conductor - User Manual Verification 'Tauri Commands'
+- [x] Task: Implement Config Commands 4b1c8f1
+- [x] Task: Hot-Reload Logic 4b1c8f1
 
 ## Phase 3: Frontend UI
 Build the settings interface.
