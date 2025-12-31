@@ -6,11 +6,13 @@
   <title>AbyssWatcher</title>
   <style>
     :root {
-      --bg-color: rgba(10, 10, 15, 0.85);
-      --accent-out: #00bfff;
-      --accent-in: #ff4040;
-      --text-main: #eee;
-      --text-dim: #aaa;
+      --bg-color: rgba(15, 15, 20, 0.7);
+      --accent-out: #00d2ff;
+      --accent-in: #ff5e5e;
+      --text-main: #ffffff;
+      --text-dim: #94a3b8;
+      --border-color: rgba(255, 255, 255, 0.1);
+      --font-stack: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
 
     * { box-sizing: border-box; }
@@ -20,11 +22,9 @@
       padding: 0;
       background-color: transparent;
       color: var(--text-main);
-      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      overflow: hidden; /* Overlay style */
+      font-family: var(--font-stack);
+      overflow: hidden;
       user-select: none;
-      
-      /* Force continuous repaint to fix transparency artifacts on Linux/Wayland */
       animation: force-repaint 1s infinite;
     }
 
@@ -40,62 +40,76 @@
       height: 100vh;
       width: 100vw;
       background-color: var(--bg-color);
-      padding: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 10px;
+      border: 1px solid var(--border-color);
+      box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
       
-      /* Ghosting fix: promote to a new compositor layer */
       transform: translateZ(0);
       will-change: transform;
     }
 
-    /* Header / Settings Section */
+    /* Header */
     #header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 4px;
+      margin-bottom: 6px;
       flex-shrink: 0;
     }
 
     h1 {
       margin: 0;
-      font-size: clamp(12px, 4vw, 18px);
+      font-size: 10px;
+      font-weight: 800;
       text-transform: uppercase;
-      letter-spacing: 1px;
+      letter-spacing: 2px;
       color: var(--text-dim);
+      opacity: 0.8;
     }
 
     #toggle-settings {
       cursor: pointer;
-      font-size: 12px;
-      background: rgba(255,255,255,0.1);
-      border: none;
+      font-size: 10px;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
       color: var(--text-dim);
-      padding: 2px 6px;
-      border-radius: 3px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      transition: all 0.2s ease;
     }
 
-    /* Selection List (Collapsible) */
+    #toggle-settings:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-main);
+    }
+
+    /* Selection List */
     #selection-container {
-      background: rgba(0,0,0,0.3);
-      border-radius: 4px;
-      margin-bottom: 8px;
-      max-height: 150px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      margin-bottom: 10px;
+      max-height: 120px;
       overflow-y: auto;
-      font-size: 12px;
+      font-size: 11px;
     }
     .hidden { display: none !important; }
 
     .char-row {
       display: flex;
       align-items: center;
-      padding: 4px 8px;
-      cursor: pointer;
+      padding: 6px 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      transition: background 0.2s ease;
     }
-    .char-row:hover { background: rgba(255,255,255,0.05); }
-    .char-row input { margin-right: 8px; }
+    .char-row:last-child { border-bottom: none; }
+    .char-row:hover { background: rgba(255, 255, 255, 0.05); }
+    .char-row input { margin-right: 10px; cursor: pointer; }
 
-    /* Main Data Section - Responsive */
+    /* Main Data Section */
     #data-container {
       flex-grow: 1;
       display: flex;
@@ -106,60 +120,77 @@
 
     .dps-summary {
       display: flex;
-      gap: 16px;
+      gap: 12px;
       justify-content: space-around;
-      align-items: center;
-      flex-wrap: wrap; /* Boxes auto-shrink and wrap */
+      align-items: baseline;
+      flex-wrap: nowrap;
     }
 
     .dps-box {
       text-align: center;
       flex: 1;
-      min-width: 80px;
     }
 
     .label {
-      font-size: clamp(10px, 3vw, 14px);
+      font-size: 9px;
+      font-weight: 700;
       color: var(--text-dim);
       display: block;
+      margin-bottom: -2px;
+      letter-spacing: 1px;
     }
 
     .value {
-      font-size: clamp(20px, 8vw, 42px); /* Auto-resizing text */
-      font-weight: bold;
+      font-size: clamp(24px, 10vw, 48px);
+      font-weight: 800;
       display: block;
       line-height: 1;
+      font-variant-numeric: tabular-nums;
     }
 
-    .out { color: var(--accent-out); text-shadow: 0 0 10px rgba(0, 191, 255, 0.3); }
-    .in { color: var(--accent-in); text-shadow: 0 0 10px rgba(255, 64, 64, 0.3); }
+    .out { 
+      color: var(--accent-out); 
+      text-shadow: 0 0 15px rgba(0, 210, 255, 0.4); 
+    }
+    .in { 
+      color: var(--accent-in); 
+      text-shadow: 0 0 15px rgba(255, 94, 94, 0.4); 
+    }
 
     /* Per-Character List */
     .active-list {
-      margin-top: 8px;
-      font-size: clamp(10px, 3.5vw, 14px);
-      border-top: 1px solid rgba(255,255,255,0.1);
-      padding-top: 4px;
+      margin-top: 10px;
+      font-size: 11px;
+      border-top: 1px solid var(--border-color);
+      padding-top: 6px;
     }
 
     .active-char {
       display: flex;
       justify-content: space-between;
-      padding: 2px 4px;
+      padding: 3px 6px;
+      border-radius: 4px;
     }
+    .active-char:nth-child(even) {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .active-char span { color: var(--text-dim); }
+    .active-char strong { color: var(--accent-out); font-weight: 700; }
 
-    /* Logs for debugging */
+    /* Debug Logs */
     #logs {
       position: absolute;
       bottom: 0;
       left: 0;
       width: 100%;
-      background: rgba(0,0,0,0.8);
-      font-size: 9px;
-      color: #666;
-      max-height: 40px;
+      background: rgba(0, 0, 0, 0.6);
+      font-size: 8px;
+      color: #475569;
+      max-height: 30px;
+      padding: 2px 8px;
       overflow: hidden;
       pointer-events: none;
+      border-top: 1px solid var(--border-color);
     }
   </style>
 </head>
