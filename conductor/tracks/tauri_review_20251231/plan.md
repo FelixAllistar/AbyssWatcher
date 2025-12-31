@@ -26,6 +26,6 @@ Document findings and apply immediate low-risk fixes.
 
 - [x] Task: Generate Audit Report 70e989b
   - Document all findings in `conductor/tracks/tauri_review_20251231/audit_report.md`.
-- [ ] Task: Apply Stabilization Fixes
+- [x] Task: Apply Stabilization Fixes 533e5d4
   - Refactor identified bottlenecks or non-idiomatic Tauri code.
 - [ ] Task: Conductor - User Manual Verification 'Consolidation' (Protocol in workflow.md)
