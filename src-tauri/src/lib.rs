@@ -78,6 +78,7 @@ pub fn run() {
                         .build(),
                 )?;
             }
+            app.handle().plugin(tauri_plugin_dialog::init())?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![get_available_characters, toggle_tracking])
