@@ -14,8 +14,7 @@ Replace linear iteration with binary search.
 ## Phase 2: Verification [~]
 Confirm correctness and performance.
 
-- [~] Task: Verify Correctness with existing tests
-  - Run the standard test suite to ensure no regression.
-- [ ] Task: Verify Performance with Stress Test
+- [x] Task: Verify Correctness with existing tests 57494ac
+- [~] Task: Verify Performance with Stress Test
   - Run the stress test again to confirm the speedup.
 - [ ] Task: Conductor - User Manual Verification 'Verification' (Protocol in workflow.md)
