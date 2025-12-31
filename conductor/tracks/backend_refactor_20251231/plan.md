@@ -6,7 +6,7 @@ Isolate the file watching and coordination logic from the Tauri binding.
 - [x] Task: Create Watcher Module d8c9895
   - Implement `src/core/watcher.rs` to handle directory scanning and `TrackedGamelog` management.
   - It should provide a method like `poll(&mut self) -> Vec<CombatEvent>`.
-- [ ] Task: Create Coordinator Module
+- [x] Task: Create Coordinator Module d7b4e05
   - Implement `src/core/coordinator.rs` that combines `Watcher` and `EngineState`.
   - Implement a `tick()` method that runs the pipeline and returns `Option<DpsSample>` and log messages.
 - [ ] Task: Conductor - User Manual Verification 'Logic Extraction'
