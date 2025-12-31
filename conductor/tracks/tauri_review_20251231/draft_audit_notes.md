@@ -14,3 +14,8 @@
 - **Payload:** The `DpsSample` payload can grow with the number of entities, but at 4Hz, it is unlikely to cause saturation unless the battle is massive (thousands of entities).
 - **Correctness:** Continuous emission is required to show DPS decay when no new events are occurring.
 - **Conclusion:** Emission logic is safe and efficient enough for the current scope.
+
+## Frontend Audit
+- **Unused Assets:** `assets/main.css` and `assets/tailwind.css` are present in the project but NOT linked in `ui/index.html`. The app uses inline styles.
+- **Cleanup:** `main.js` sets up event listeners but does not capture the returned `unlisten` functions. This is acceptable for a single-page app that doesn't unmount components, but bad practice generally.
+- **Responsiveness:** CSS uses `clamp()` and flexbox correctly for window resizing.
