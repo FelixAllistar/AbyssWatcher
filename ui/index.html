@@ -1,45 +1,180 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AbyssWatcher</title>
-    <style>
-      body {
-        margin: 0;
-        padding: 0;
-        background-color: rgba(0, 0, 0, 0.8);
-        color: white;
-        font-family: sans-serif;
-        overflow-y: auto; /* Allow scrolling if list is long */
-      }
-      #app {
-        padding: 1rem;
-      }
-      .summary {
-        margin-bottom: 1rem;
-        font-size: 1.2rem;
-      }
-      .characters {
-        margin-top: 1rem;
-      }
-      #selection label {
-        cursor: pointer;
-        padding: 4px 0;
-      }
-      #selection label:hover {
-        background: rgba(255, 255, 255, 0.1);
-      }
-    </style>
-  </head>
-  <body>
-    <div id="app">
-      <h1>AbyssWatcher Tauri</h1>
-      <div id="selection-container"></div>
-      <div id="data-container">
-        <p>Waiting for combat data...</p>
-      </div>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AbyssWatcher</title>
+  <style>
+    :root {
+      --bg-color: rgba(10, 10, 15, 0.85);
+      --accent-out: #00bfff;
+      --accent-in: #ff4040;
+      --text-main: #eee;
+      --text-dim: #aaa;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: transparent;
+      color: var(--text-main);
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden; /* Overlay style */
+      user-select: none;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100vw;
+      background-color: var(--bg-color);
+      padding: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* Header / Settings Section */
+    #header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+      flex-shrink: 0;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(12px, 4vw, 18px);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-dim);
+    }
+
+    #toggle-settings {
+      cursor: pointer;
+      font-size: 12px;
+      background: rgba(255,255,255,0.1);
+      border: none;
+      color: var(--text-dim);
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+
+    /* Selection List (Collapsible) */
+    #selection-container {
+      background: rgba(0,0,0,0.3);
+      border-radius: 4px;
+      margin-bottom: 8px;
+      max-height: 150px;
+      overflow-y: auto;
+      font-size: 12px;
+    }
+    .hidden { display: none !important; }
+
+    .char-row {
+      display: flex;
+      align-items: center;
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+    .char-row:hover { background: rgba(255,255,255,0.05); }
+    .char-row input { margin-right: 8px; }
+
+    /* Main Data Section - Responsive */
+    #data-container {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 0;
+    }
+
+    .dps-summary {
+      display: flex;
+      gap: 16px;
+      justify-content: space-around;
+      align-items: center;
+      flex-wrap: wrap; /* Boxes auto-shrink and wrap */
+    }
+
+    .dps-box {
+      text-align: center;
+      flex: 1;
+      min-width: 80px;
+    }
+
+    .label {
+      font-size: clamp(10px, 3vw, 14px);
+      color: var(--text-dim);
+      display: block;
+    }
+
+    .value {
+      font-size: clamp(20px, 8vw, 42px); /* Auto-resizing text */
+      font-weight: bold;
+      display: block;
+      line-height: 1;
+    }
+
+    .out { color: var(--accent-out); text-shadow: 0 0 10px rgba(0, 191, 255, 0.3); }
+    .in { color: var(--accent-in); text-shadow: 0 0 10px rgba(255, 64, 64, 0.3); }
+
+    /* Per-Character List */
+    .active-list {
+      margin-top: 8px;
+      font-size: clamp(10px, 3.5vw, 14px);
+      border-top: 1px solid rgba(255,255,255,0.1);
+      padding-top: 4px;
+    }
+
+    .active-char {
+      display: flex;
+      justify-content: space-between;
+      padding: 2px 4px;
+    }
+
+    /* Logs for debugging */
+    #logs {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: rgba(0,0,0,0.8);
+      font-size: 9px;
+      color: #666;
+      max-height: 40px;
+      overflow: hidden;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="header">
+      <h1>Watcher</h1>
+      <button id="toggle-settings">Characters</button>
     </div>
-    <script src="main.js"></script>
-  </body>
+
+    <div id="selection-container" class="hidden"></div>
+
+    <div id="data-container">
+      <div class="dps-summary">
+        <div class="dps-box">
+          <span class="label">OUT</span>
+          <span id="out-dps" class="value out">0.0</span>
+        </div>
+        <div class="dps-box">
+          <span class="label">IN</span>
+          <span id="in-dps" class="value in">0.0</span>
+        </div>
+      </div>
+      <div id="active-list" class="active-list"></div>
+    </div>
+
+    <div id="logs"></div>
+  </div>
+  <script src="main.js"></script>
+</body>
 </html>

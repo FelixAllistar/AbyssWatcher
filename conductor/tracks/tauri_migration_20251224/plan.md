@@ -26,7 +26,7 @@ This phase bridges the gap between the Rust log parser and the Webview.
 ## Phase 3: UI Prototyping (The "CSS" Part)
 This phase addresses the core reason for the migration: responsive layout.
 
-- [ ] Task: Implement Responsive DPS Layout
+- [x] Task: Implement Responsive DPS Layout
   - Create a CSS Grid/Flexbox layout for the overlay.
   - Use viewport units (`vw`, `vh`) or `clamp()` for font sizing.
   - Verify that shrinking the window "squishes" the UI gracefully without breaking.

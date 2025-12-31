@@ -1,69 +1,84 @@
 const { listen } = window.__TAURI__.event;
 const { invoke } = window.__TAURI__.core;
 
+const selectionContainer = document.getElementById("selection-container");
+const outDpsEl = document.getElementById("out-dps");
+const inDpsEl = document.getElementById("in-dps");
+const activeListEl = document.getElementById("active-list");
+const logEl = document.getElementById("logs");
+const toggleBtn = document.getElementById("toggle-settings");
+
+let characters = [];
+
 async function init() {
-  const dataContainer = document.getElementById("data-container");
-  const selectionContainer = document.getElementById("selection-container");
+  logToScreen("Initializing...");
 
-  function logToScreen(msg) {
-    const p = document.createElement("p");
-    p.textContent = `[JS LOG]: ${msg}`;
-    p.style.fontSize = "10px";
-    p.style.color = "#aaa";
-    document.body.appendChild(p);
-  }
-
-  logToScreen("Initializing AbyssWatcher Frontend...");
+  // Toggle settings visibility
+  toggleBtn.onclick = () => {
+    selectionContainer.classList.toggle("hidden");
+  };
 
   // 1. Get available characters
   try {
-    const characters = await invoke("get_available_characters");
-    logToScreen(`Found ${characters.length} characters.`);
-    
-    if (characters.length === 0) {
-      selectionContainer.innerHTML = "<p>No characters detected in logs folder.</p>";
-    } else {
-      const selectionEl = document.createElement("div");
-      selectionEl.id = "selection";
-      selectionEl.innerHTML = "<h3>Select Characters to Track:</h3>";
-      
-      characters.forEach(char => {
-        const label = document.createElement("label");
-        label.style.display = "block";
-        label.style.cursor = "pointer";
-        
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.onchange = async () => {
-          logToScreen(`Toggling: ${char.character}`);
-          await invoke("toggle_tracking", { path: char.path });
-        };
-        
-        label.appendChild(checkbox);
-        label.appendChild(document.createTextNode(` ${char.character}`));
-        selectionEl.appendChild(label);
-      });
-      selectionContainer.appendChild(selectionEl);
-    }
+    characters = await invoke("get_available_characters");
+    renderSelection();
   } catch (e) {
-    logToScreen("Error getting characters: " + JSON.stringify(e));
+    logToScreen("Error: " + JSON.stringify(e));
   }
 
   // 2. Listen for DPS updates
   await listen("dps-update", (event) => {
-    lastDpsData = event.payload;
-    updateUI();
+    updateUI(event.payload);
   });
 
   // 3. Listen for backend logs
   await listen("backend-log", (event) => {
-    logToScreen(`[BACKEND]: ${event.payload}`);
+    logToScreen(event.payload);
   });
 }
 
-// Ensure the DOM is fully loaded before running
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", init);
-} else {
-  init();
+function renderSelection() {
+  selectionContainer.innerHTML = "";
+  if (characters.length === 0) {
+    selectionContainer.innerHTML = "<div style='padding:8px'>No logs found.</div>";
+    return;
+  }
+
+  characters.forEach(char => {
+    const div = document.createElement("div");
+    div.className = "char-row";
+    
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.onchange = () => invoke("toggle_tracking", { path: char.path });
+    
+    div.appendChild(checkbox);
+    div.appendChild(document.createTextNode(char.character));
+    selectionContainer.appendChild(div);
+  });
 }
+
+function updateUI(data) {
+  outDpsEl.textContent = data.outgoing_dps.toFixed(1);
+  inDpsEl.textContent = data.incoming_dps.toFixed(1);
+
+  // Update per-character breakdown
+  let html = "";
+  const chars = Object.entries(data.outgoing_by_character);
+  if (chars.length > 1) {
+      chars.sort((a, b) => b[1] - a[1]);
+      chars.forEach(([name, dps]) => {
+        html += `<div class="active-char"><span>${name}</span><strong>${dps.toFixed(1)}</strong></div>`;
+      });
+  }
+  activeListEl.innerHTML = html;
+}
+
+function logToScreen(msg) {
+    const p = document.createElement("div");
+    p.textContent = msg;
+    logEl.prepend(p);
+    if (logEl.children.length > 5) logEl.lastChild.remove();
+}
+
+init();
