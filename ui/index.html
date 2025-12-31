@@ -33,6 +33,10 @@
       background-color: var(--bg-color);
       padding: 8px;
       border: 1px solid rgba(255, 255, 255, 0.1);
+      
+      /* Ghosting fix: promote to a new compositor layer */
+      transform: translateZ(0);
+      will-change: transform;
     }
 
     /* Header / Settings Section */
