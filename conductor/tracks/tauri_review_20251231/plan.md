@@ -7,7 +7,7 @@ Review the Rust side of the Tauri application.
   - Analyze the loop in `src-tauri/src/lib.rs`.
   - Check `scan_gamelogs_dir` frequency and its impact on CPU.
   - Review `Mutex` usage in `AppState` for potential deadlocks.
-- [ ] Task: Audit Event Emission Logic
+- [x] Task: Audit Event Emission Logic 3678114
   - Ensure events are only emitted when necessary.
   - Verify that `backend-log` and `dps-update` events don't saturate the IPC bridge.
 - [ ] Task: Conductor - User Manual Verification 'Backend Audit' (Protocol in workflow.md)
