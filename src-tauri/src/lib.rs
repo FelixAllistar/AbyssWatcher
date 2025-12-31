@@ -1,9 +1,9 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use tauri::{Emitter, Manager, State};
-use abyss_watcher::core::{log_io, model, state, tracker};
+use abyss_watcher::core::{log_io, coordinator};
 
 const DEFAULT_GAMELOG_PATH: &str =
     "/home/felix/Games/eve-online/drive_c/users/felix/My Documents/EVE/logs/Gamelogs";
@@ -38,21 +38,12 @@ pub fn run() {
         })
         .setup(|app| {
             let handle = app.handle().clone();
-            let state = app.state::<AppState>();
-            // Background task needs its own "pointer" to the state
-            // In Tauri v2, we can just use the handle to get it back later, 
-            // but for the move closure, we'll get the reference now.
             
             // Start the background log watcher
             tauri::async_runtime::spawn(async move {
                 println!("Background log watcher started. Monitoring: {:?}", DEFAULT_GAMELOG_PATH);
-                let mut engine = state::EngineState::new();
-                let mut trackers: HashMap<PathBuf, tracker::TrackedGamelog> = HashMap::new();
-                
-                let mut last_event_timestamp: Option<Duration> = None;
-                let mut last_event_wallclock: Option<SystemTime> = None;
-                let mut current_tracked_set: HashSet<PathBuf> = HashSet::new();
-
+                let log_dir = PathBuf::from(DEFAULT_GAMELOG_PATH);
+                let mut coordinator = coordinator::Coordinator::new(log_dir);
                 let dps_window = Duration::from_secs(5);
 
                 loop {
@@ -63,71 +54,17 @@ pub fn run() {
                         tracked.clone()
                     };
 
-                    // Handle changes in the tracked set
-                    if active_paths != current_tracked_set {
-                        let removed = current_tracked_set.difference(&active_paths).next().is_some();
-                        if removed {
-                            engine = state::EngineState::new();
-                            last_event_timestamp = None;
-                            last_event_wallclock = None;
-                        }
-                        
-                        for path in &active_paths {
-                            if !trackers.contains_key(path) {
-                                if let Ok(logs) = log_io::scan_gamelogs_dir(DEFAULT_GAMELOG_PATH) {
-                                    if let Some(log) = logs.iter().find(|l| &l.path == path) {
-                                        if let Ok(tr) = tracker::TrackedGamelog::new(log.character.clone(), path.clone()) {
-                                            let msg = format!("Started tracking: {}", log.character);
-                                            println!("{}", msg);
-                                            let _ = handle.emit("backend-log", msg);
-                                            trackers.insert(path.clone(), tr);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        current_tracked_set = active_paths;
+                    let output = coordinator.tick(&active_paths, dps_window);
+
+                    // Emit logs
+                    for msg in output.logs {
+                        println!("{}", msg);
+                        let _ = handle.emit("backend-log", msg);
                     }
 
-                    // 2. Read new events
-                    for (path, tracker) in trackers.iter_mut() {
-                        if !current_tracked_set.contains(path) { continue; }
-                        
-                        if let Ok(new_events) = tracker.read_new_events() {
-                            if !new_events.is_empty() {
-                                let msg = format!("Read {} new events for {}", new_events.len(), tracker.source);
-                                println!("{}", msg);
-                                let _ = handle.emit("backend-log", msg);
-                                let now_wallclock = SystemTime::now();
-                                
-                                for event in new_events {
-                                    last_event_timestamp = Some(match last_event_timestamp {
-                                        Some(prev) => std::cmp::max(prev, event.timestamp),
-                                        None => event.timestamp,
-                                    });
-                                    engine.push_event(event);
-                                }
-                                last_event_wallclock = Some(now_wallclock);
-                            }
-                        }
-                    }
-
-                    // 3. Compute DPS and Emit
-                    let end_time = match (last_event_timestamp, last_event_wallclock) {
-                        (Some(timestamp), Some(seen_at)) => {
-                            if let Ok(elapsed) = SystemTime::now().duration_since(seen_at) {
-                                timestamp + elapsed
-                            } else {
-                                timestamp
-                            }
-                        }
-                        (Some(timestamp), None) => timestamp,
-                        (None, _) => Duration::from_secs(0),
-                    };
-
-                    let samples = engine.dps_series(dps_window, end_time);
-                    if let Some(latest) = samples.last() {
-                        let _ = handle.emit("dps-update", latest);
+                    // Emit DPS
+                    if let Some(sample) = output.dps_sample {
+                        let _ = handle.emit("dps-update", sample);
                     }
 
                     tokio::time::sleep(Duration::from_millis(250)).await;
