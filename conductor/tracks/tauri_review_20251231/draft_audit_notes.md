@@ -8,3 +8,9 @@
     - **Recommendation:** Implement binary search to locate the start/end indices for the analysis window.
 - **Watcher Loop:** `scan_gamelogs_dir` is properly conditional (only runs when tracking changes), so it is efficient.
 - **Concurrency:** `Mutex<HashSet<PathBuf>>` usage is minimal and correctly scoped. Low deadlock risk.
+
+## Event Emission Logic
+- **Frequency:** `dps-update` emits at 4Hz (250ms interval). This is well within Tauri's IPC capacity.
+- **Payload:** The `DpsSample` payload can grow with the number of entities, but at 4Hz, it is unlikely to cause saturation unless the battle is massive (thousands of entities).
+- **Correctness:** Continuous emission is required to show DPS decay when no new events are occurring.
+- **Conclusion:** Emission logic is safe and efficient enough for the current scope.
