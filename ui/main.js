@@ -16,10 +16,6 @@ async function init() {
   // Toggle settings visibility
   toggleBtn.onclick = () => {
     selectionContainer.classList.toggle("hidden");
-    // Force a repaint to help clear ghosting artifacts on transparent windows
-    document.body.style.display = 'none';
-    document.body.offsetHeight; // Trigger reflow
-    document.body.style.display = '';
   };
 
   // 1. Get available characters
