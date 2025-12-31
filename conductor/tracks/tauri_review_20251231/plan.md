@@ -3,7 +3,7 @@
 ## Phase 1: Backend Audit
 Review the Rust side of the Tauri application.
 
-- [ ] Task: Audit Backend Watcher Efficiency
+- [x] Task: Audit Backend Watcher Efficiency 628aaf8
   - Analyze the loop in `src-tauri/src/lib.rs`.
   - Check `scan_gamelogs_dir` frequency and its impact on CPU.
   - Review `Mutex` usage in `AppState` for potential deadlocks.
