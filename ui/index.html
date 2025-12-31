@@ -23,6 +23,15 @@
       font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       overflow: hidden; /* Overlay style */
       user-select: none;
+      
+      /* Force continuous repaint to fix transparency artifacts on Linux/Wayland */
+      animation: force-repaint 1s infinite;
+    }
+
+    @keyframes force-repaint {
+      0% { opacity: 1; }
+      50% { opacity: 0.99; }
+      100% { opacity: 1; }
     }
 
     #app {
