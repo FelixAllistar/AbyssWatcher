@@ -4,5 +4,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [~] Track: Performance Optimization - DPS Analysis
-*Link: [./conductor/tracks/performance_optimization_20251231/](./conductor/tracks/performance_optimization_20251231/)*
+## [~] Track: Backend Architecture Refactor
+*Link: [./conductor/tracks/backend_refactor_20251231/](./conductor/tracks/backend_refactor_20251231/)*

@@ -11,19 +11,16 @@ Isolate the file watching and coordination logic from the Tauri binding.
   - Implement a `tick()` method that runs the pipeline and returns `Option<DpsSample>` and log messages.
 - [ ] Task: Conductor - User Manual Verification 'Logic Extraction'
 
-## Phase 2: Integration [~]
+## Phase 2: Integration [checkpoint: d5ed583]
 Connect the new modules to the Tauri backend.
 
 - [x] Task: Wire up Tauri Backend d5ed583
-  - Replace the loop in `src-tauri/src/lib.rs` with the new `Coordinator`.
-  - Ensure events are emitted correctly to the frontend.
-- [ ] Task: Conductor - User Manual Verification 'Integration'
+- [x] Task: Conductor - User Manual Verification 'Integration'
 
-## Phase 3: Cleanup
+## Phase 3: Cleanup [~]
 Polishing and verifying the new architecture.
 
-- [ ] Task: Error Handling Audit
+- [~] Task: Error Handling Audit
   - Scan the new modules for `unwrap()` and replace with `Result` or error logging.
-- [ ] Task: Verify Refactor
+- [~] Task: Verify Refactor
   - Run all tests to ensure no regressions.
-- [ ] Task: Conductor - User Manual Verification 'Cleanup'
