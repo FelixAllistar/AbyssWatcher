@@ -59,6 +59,11 @@
       flex-shrink: 0;
     }
 
+    .header-controls {
+      display: flex;
+      gap: 6px;
+    }
+
     h1 {
       margin: 0;
       font-size: 10px;
@@ -69,7 +74,7 @@
       opacity: 0.8;
     }
 
-    #toggle-settings {
+    button.icon-btn {
       cursor: pointer;
       font-size: 10px;
       font-weight: 600;
@@ -81,10 +86,75 @@
       transition: all 0.2s ease;
     }
 
-    #toggle-settings:hover {
+    button.icon-btn:hover {
       background: rgba(255, 255, 255, 0.1);
       color: var(--text-main);
     }
+
+    /* Settings Modal */
+    #settings-modal {
+      position: absolute;
+      top: 30px;
+      left: 10px;
+      right: 10px;
+      background: rgba(15, 15, 20, 0.95);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 10px;
+      z-index: 100;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+      backdrop-filter: blur(10px);
+    }
+    
+    #settings-modal h2 {
+      margin: 0 0 10px 0;
+      font-size: 12px;
+      color: var(--accent-out);
+      text-transform: uppercase;
+    }
+
+    .form-group {
+      margin-bottom: 10px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    input[type="text"], input[type="number"] {
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 4px;
+      font-size: 11px;
+      border-radius: 3px;
+      flex-grow: 1;
+    }
+    
+    input[type="number"] { width: 60px; flex-grow: 0; }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    
+    .primary-btn {
+      background: var(--accent-out);
+      color: #000;
+      border: none;
+      font-weight: 700;
+    }
+    .primary-btn:hover { background: #33dbff; }
 
     /* Selection List */
     #selection-container {
@@ -107,6 +177,7 @@
       pointer-events: none;
       display: block !important; /* Override the previous hidden style */
     }
+    #settings-modal.hidden { display: none; }
 
     .char-row {
       display: flex;
@@ -208,7 +279,30 @@
   <div id="app">
     <div id="header">
       <h1>Watcher</h1>
-      <button id="toggle-settings">Characters</button>
+      <div class="header-controls">
+        <button id="toggle-settings" class="icon-btn">Chars</button>
+        <button id="toggle-config" class="icon-btn">⚙</button>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="hidden">
+      <h2>Configuration</h2>
+      <div class="form-group">
+        <label>Game Logs Directory</label>
+        <div class="form-row">
+            <input type="text" id="log-dir-input" readonly />
+            <button id="browse-btn" class="icon-btn">...</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>DPS Window (Seconds)</label>
+        <input type="number" id="dps-window-input" min="1" max="60" />
+      </div>
+      <div class="modal-actions">
+        <button id="cancel-settings" class="icon-btn">Cancel</button>
+        <button id="save-settings" class="icon-btn primary-btn">Save</button>
+      </div>
     </div>
 
     <div id="selection-container" class="hidden"></div>

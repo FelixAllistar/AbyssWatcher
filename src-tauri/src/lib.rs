@@ -26,10 +26,14 @@ fn save_settings(settings: Settings, state: State<'_, AppState>) -> Result<(), S
 
 #[tauri::command]
 async fn pick_gamelog_dir(app: tauri::AppHandle) -> Result<Option<PathBuf>, String> {
-    // Async dialog to avoid freezing the main thread
-    match app.dialog().file().pick_folder().await {
+    // Run blocking dialog on a separate thread to avoid freezing the UI
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        app.dialog().file().blocking_pick_folder()
+    }).await.map_err(|e| e.to_string())?;
+
+    match result {
         Some(file_path) => file_path.into_path().map(Some).map_err(|e| e.to_string()),
-        None => Ok(None),
+        None => Ok(None)
     }
 }
 

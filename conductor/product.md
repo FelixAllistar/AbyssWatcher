@@ -1,7 +1,7 @@
 # Product Guide - AbyssWatcher
 
 ## Initial Concept
-An always-on-top `egui` overlay window that reads EVE Online gamelogs and displays DPS (Damage Per Second) analysis.
+An always-on-top Tauri overlay window that reads EVE Online gamelogs and displays DPS (Damage Per Second) analysis using modern web technologies.
 
 ## Target Users
 - **EVE Online players participating in Abyssal Deadspace:** Players who need real-time performance metrics to survive and optimize their runs in high-stakes environments.
@@ -14,5 +14,5 @@ An always-on-top `egui` overlay window that reads EVE Online gamelogs and displa
 
 ## Key Features
 - **Robust Log Parsing:** High-accuracy parsing of EVE Online combat logs, capturing damage dealt, damage received, and related combat events.
-- **Interactive Combat Analytics:** Rich visualization of combat data using `egui_plot`, including real-time DPS graphs and historical performance breakdowns.
+- **Interactive Combat Analytics:** Rich visualization of combat data, including real-time DPS metrics and character-specific performance breakdowns with modern glassmorphism aesthetic.
 - **Automated Character Management:** Smart detection of new log files and automatic mapping of logs to specific characters, minimizing manual setup for the user.
