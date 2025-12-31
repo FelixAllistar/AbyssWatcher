@@ -9,7 +9,7 @@ use super::parser;
 pub struct TrackedGamelog {
     tailer: log_io::LogTailer,
     parser: parser::LineParser,
-    source: String,
+    pub source: String,
     path: PathBuf,
 }
 

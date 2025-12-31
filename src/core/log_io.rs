@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, Seek, SeekFrom};
@@ -54,6 +55,7 @@ impl LogTailer {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CharacterLog {
     pub character: String,
     pub path: PathBuf,

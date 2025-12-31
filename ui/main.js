@@ -1,35 +1,69 @@
 const { listen } = window.__TAURI__.event;
-
-const appEl = document.getElementById("app");
+const { invoke } = window.__TAURI__.core;
 
 async function init() {
-  console.log("Initializing AbyssWatcher Frontend...");
+  const dataContainer = document.getElementById("data-container");
+  const selectionContainer = document.getElementById("selection-container");
 
-  const unlisten = await listen("dps-update", (event) => {
-    const data = event.payload;
-    console.log("Received DPS update:", data);
-    updateUI(data);
+  function logToScreen(msg) {
+    const p = document.createElement("p");
+    p.textContent = `[JS LOG]: ${msg}`;
+    p.style.fontSize = "10px";
+    p.style.color = "#aaa";
+    document.body.appendChild(p);
+  }
+
+  logToScreen("Initializing AbyssWatcher Frontend...");
+
+  // 1. Get available characters
+  try {
+    const characters = await invoke("get_available_characters");
+    logToScreen(`Found ${characters.length} characters.`);
+    
+    if (characters.length === 0) {
+      selectionContainer.innerHTML = "<p>No characters detected in logs folder.</p>";
+    } else {
+      const selectionEl = document.createElement("div");
+      selectionEl.id = "selection";
+      selectionEl.innerHTML = "<h3>Select Characters to Track:</h3>";
+      
+      characters.forEach(char => {
+        const label = document.createElement("label");
+        label.style.display = "block";
+        label.style.cursor = "pointer";
+        
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.onchange = async () => {
+          logToScreen(`Toggling: ${char.character}`);
+          await invoke("toggle_tracking", { path: char.path });
+        };
+        
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(` ${char.character}`));
+        selectionEl.appendChild(label);
+      });
+      selectionContainer.appendChild(selectionEl);
+    }
+  } catch (e) {
+    logToScreen("Error getting characters: " + JSON.stringify(e));
+  }
+
+  // 2. Listen for DPS updates
+  await listen("dps-update", (event) => {
+    lastDpsData = event.payload;
+    updateUI();
+  });
+
+  // 3. Listen for backend logs
+  await listen("backend-log", (event) => {
+    logToScreen(`[BACKEND]: ${event.payload}`);
   });
 }
 
-function updateUI(data) {
-  // Simple rendering for prototype
-  let html = `
-    <div class="summary">
-      <p>Outgoing DPS: <strong>${data.outgoing_dps.toFixed(1)}</strong></p>
-      <p>Incoming DPS: <strong>${data.incoming_dps.toFixed(1)}</strong></p>
-    </div>
-    <div class="characters">
-      <h3>Characters:</h3>
-      <ul>
-  `;
-
-  for (const [char, dps] of Object.entries(data.outgoing_by_character)) {
-    html += `<li>${char}: ${dps.toFixed(1)}</li>`;
-  }
-
-  html += `</ul></div>`;
-  appEl.innerHTML = html;
+// Ensure the DOM is fully loaded before running
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
 }
-
-init();

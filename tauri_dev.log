@@ -1,0 +1,17 @@
+    Running DevCommand (`cargo  run --no-default-features --color always --`)
+    Info Watching /home/felix/projects/AbyssWatcher/src-tauri for changes...
+[1m[92m   Compiling[0m abyss-watcher-tauri v0.1.0 (/home/felix/projects/AbyssWatcher/src-tauri)
+[1m[96m    Building[0m [=======================> ] 648/651: abyss-watcher-tauri(build)  [1m[96m    Building[0m [=======================> ] 649/651: abyss-watcher-tauri         [K[0m[1m[33mwarning[0m[0m[1m: unused import: `model`[0m
+[0m [0m[0m[1m[38;5;12m--> [0m[0msrc/lib.rs:6:35[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m6[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0muse abyss_watcher::core::{log_io, model, state, tracker};[0m
+[0m  [0m[0m[1m[38;5;12m|[0m[0m                                   [0m[0m[1m[33m^^^^^[0m
+[0m  [0m[0m[1m[38;5;12m|[0m
+[0m  [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default[0m
+
+[1m[96m    Building[0m [=======================> ] 649/651: abyss-watcher-tauri         [K[1m[33mwarning[0m: `abyss-watcher-tauri` (lib) generated 1 warning (run `cargo fix --lib -p abyss-watcher-tauri` to apply 1 suggestion)
+[1m[96m    Building[0m [=======================> ] 650/651: abyss-watcher-tauri(bin)    [K[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 6.67s
+[1m[92m     Running[0m `target/debug/abyss-watcher-tauri`
+Background log watcher started. Monitoring: "/home/felix/Games/eve-online/drive_c/users/felix/My Documents/EVE/logs/Gamelogs"
+Frontend requested available characters.
+Found 10 characters.

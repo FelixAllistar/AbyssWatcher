@@ -8,20 +8,37 @@
       body {
         margin: 0;
         padding: 0;
-        background-color: rgba(0, 0, 0, 0.8); /* Semi-transparent background */
+        background-color: rgba(0, 0, 0, 0.8);
         color: white;
         font-family: sans-serif;
-        overflow: hidden;
+        overflow-y: auto; /* Allow scrolling if list is long */
       }
       #app {
         padding: 1rem;
+      }
+      .summary {
+        margin-bottom: 1rem;
+        font-size: 1.2rem;
+      }
+      .characters {
+        margin-top: 1rem;
+      }
+      #selection label {
+        cursor: pointer;
+        padding: 4px 0;
+      }
+      #selection label:hover {
+        background: rgba(255, 255, 255, 0.1);
       }
     </style>
   </head>
   <body>
     <div id="app">
       <h1>AbyssWatcher Tauri</h1>
-      <p>Waiting for combat data...</p>
+      <div id="selection-container"></div>
+      <div id="data-container">
+        <p>Waiting for combat data...</p>
+      </div>
     </div>
     <script src="main.js"></script>
   </body>
