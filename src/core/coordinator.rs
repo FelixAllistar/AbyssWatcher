@@ -92,6 +92,13 @@ impl Coordinator {
             logs,
         }
     }
+
+    pub fn replay_logs(&mut self) {
+        self.engine = EngineState::new();
+        self.last_event_timestamp = None;
+        self.last_event_wallclock = None;
+        self.watcher.rewind_all();
+    }
 }
 
 #[cfg(test)]

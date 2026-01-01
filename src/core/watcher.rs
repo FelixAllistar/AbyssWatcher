@@ -80,6 +80,12 @@ impl LogWatcher {
 
         (all_events, messages)
     }
+
+    pub fn rewind_all(&mut self) {
+        for tracker in self.trackers.values_mut() {
+            let _ = tracker.rewind();
+        }
+    }
 }
 
 #[cfg(test)]

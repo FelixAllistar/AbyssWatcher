@@ -35,6 +35,10 @@ impl TrackedGamelog {
         Ok(events)
     }
 
+    pub fn rewind(&mut self) -> io::Result<()> {
+        self.tailer.rewind()
+    }
+
     #[allow(dead_code)]
     pub fn path(&self) -> &Path {
         &self.path

@@ -4,12 +4,23 @@ use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
+use tokio::sync::mpsc;
 use abyss_watcher::core::{log_io, coordinator, config::{ConfigManager, Settings}};
+
+enum LoopCommand {
+    Replay,
+}
 
 struct AppState {
     tracked_paths: Mutex<HashSet<PathBuf>>,
     settings: Mutex<Settings>,
     config_manager: ConfigManager,
+    loop_tx: mpsc::Sender<LoopCommand>,
+}
+
+#[tauri::command]
+async fn replay_logs(state: State<'_, AppState>) -> Result<(), String> {
+    state.loop_tx.send(LoopCommand::Replay).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -67,10 +78,14 @@ pub fn run() {
             let settings = config_manager.load();
             let initial_settings = settings.clone();
             
+            // Create a channel for communicating with the background loop
+            let (tx, mut rx) = mpsc::channel(32);
+
             app.manage(AppState {
                 tracked_paths: Mutex::new(HashSet::new()),
                 settings: Mutex::new(settings),
                 config_manager,
+                loop_tx: tx,
             });
 
             if cfg!(debug_assertions) {
@@ -89,6 +104,16 @@ pub fn run() {
                 println!("Background watcher started. Monitoring: {:?}", current_log_dir);
 
                 loop {
+                    // Check for commands from the frontend
+                    while let Ok(cmd) = rx.try_recv() {
+                        match cmd {
+                            LoopCommand::Replay => {
+                                println!("Replaying logs...");
+                                coordinator.replay_logs();
+                            }
+                        }
+                    }
+
                     // Get the shared state
                     let (active_paths, current_settings) = {
                         let app_state = handle.state::<AppState>();
@@ -101,8 +126,6 @@ pub fn run() {
                     if current_settings.gamelog_dir != current_log_dir {
                         println!("Log directory changed to: {:?}", current_settings.gamelog_dir);
                         current_log_dir = current_settings.gamelog_dir.clone();
-                        // Recreate coordinator with new path
-                        // Note: This resets the DPS history, which is acceptable when changing logs
                         coordinator = coordinator::Coordinator::new(current_log_dir.clone());
                     }
 
@@ -133,7 +156,8 @@ pub fn run() {
             toggle_tracking,
             get_settings,
             save_settings,
-            pick_gamelog_dir
+            pick_gamelog_dir,
+            replay_logs
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -49,6 +49,12 @@ impl LogTailer {
         Ok(lines)
     }
 
+    pub fn rewind(&mut self) -> io::Result<()> {
+        self.position = 0;
+        self.file.seek(SeekFrom::Start(0))?;
+        Ok(())
+    }
+
     #[allow(dead_code)]
     pub fn path(&self) -> &Path {
         &self.path
