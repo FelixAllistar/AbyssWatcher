@@ -12,7 +12,7 @@
 - [x] Task: Implement grouping logic to cluster logs by timestamp (e.g., logs starting within 10 minutes of each other). b150f2f
 - [x] Task: Expose session discovery via a Tauri command `get_replay_sessions`. b150f2f
 - [x] Task: Build the "Session Picker" UI in the Replay window (List of runs -> List of character logs). b150f2f
-- [ ] Task: Conductor - User Manual Verification 'Log Discovery & Session Grouping' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Log Discovery & Session Grouping' (Protocol in workflow.md) [checkpoint: fddc62e]
 
 ## Phase 3: Synchronized Playback Engine
 - [ ] Task: Create `core::replay_engine::MergedStream` to read multiple log files and yield lines in chronological order.
