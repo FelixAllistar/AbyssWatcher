@@ -100,7 +100,11 @@ try {
         div.className = "char-row";
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
-        checkbox.onchange = () => invoke("toggle_tracking", { path: char.path });
+        checkbox.checked = char.tracked;
+        checkbox.onchange = () => {
+            char.tracked = checkbox.checked;
+            invoke("toggle_tracking", { path: char.path });
+        };
         div.appendChild(checkbox);
         div.appendChild(document.createTextNode(char.character));
         els.selectionContainer.appendChild(div);
@@ -129,23 +133,42 @@ try {
     // Active List
     let html = "";
     
-    // Sort characters by their total outgoing DPS (legacy sort) or maybe total activity?
-    // For now, let's stick to sorting by outgoing DPS if available, else just alphabetical or activity sum.
-    // The previous logic used outgoing_by_character (which was just DPS).
-    // Let's iterate over the new map: combat_actions_by_character
-    
-    const chars = Object.entries(data.combat_actions_by_character || {});
+    // Convert data to Map for easy lookup
+    const activeData = new Map(Object.entries(data.combat_actions_by_character || {}));
+
+    // Merge tracked characters that are inactive
+    characters.forEach(char => {
+        if (char.tracked && !activeData.has(char.character)) {
+            activeData.set(char.character, []);
+        }
+    });
+
+    const chars = Array.from(activeData.entries());
     
     // Sort logic: Alphabetical by character name
     chars.sort((a, b) => a[0].localeCompare(b[0]));
 
     chars.forEach(([name, actions]) => {
-        // Calculate total activity for the header
-        const totalVal = actions.reduce((acc, act) => acc + act.value, 0);
+        // Calculate totals by type
+        let dps = 0, hps = 0, cap = 0, neut = 0;
+        actions.forEach(act => {
+            if (act.action_type === "Damage") dps += act.value;
+            else if (act.action_type === "Repair") hps += act.value;
+            else if (act.action_type === "Capacitor") cap += act.value;
+            else if (act.action_type === "Neut") neut += act.value;
+        });
+
+        // Build Header with Badges
+        let headerBadges = "";
+        if (dps > 0 || (hps===0 && cap===0 && neut===0)) headerBadges += `<span style="color:${STYLES.damage.color}; margin-left:6px">${dps.toFixed(1)}</span>`;
+        if (hps > 0) headerBadges += `<span style="color:${STYLES.repair.color}; margin-left:6px">REP ${hps.toFixed(1)}</span>`;
+        if (cap > 0) headerBadges += `<span style="color:${STYLES.cap.color}; margin-left:6px">CAP ${cap.toFixed(1)}</span>`;
+        if (neut > 0) headerBadges += `<span style="color:${STYLES.neut.color}; margin-left:6px">NEUT ${neut.toFixed(1)}</span>`;
 
         html += `<div style="margin-bottom:6px; border-bottom:1px solid rgba(255,255,255,0.05)">
           <div style="display:flex; justify-content:space-between; font-weight:700">
-            <span>${name}</span><span style="color:#00d2ff">${totalVal.toFixed(1)}</span>
+            <span>${name}</span>
+            <div>${headerBadges}</div>
           </div>`;
         
         // Actions

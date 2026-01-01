@@ -48,10 +48,27 @@ async fn pick_gamelog_dir(app: tauri::AppHandle) -> Result<Option<PathBuf>, Stri
     }
 }
 
+#[derive(serde::Serialize)]
+struct CharacterUIState {
+    character: String,
+    path: PathBuf,
+    tracked: bool,
+}
+
 #[tauri::command]
-fn get_available_characters(state: State<'_, AppState>) -> Vec<log_io::CharacterLog> {
+fn get_available_characters(state: State<'_, AppState>) -> Vec<CharacterUIState> {
     let settings = state.settings.lock().unwrap();
-    log_io::scan_gamelogs_dir(&settings.gamelog_dir).unwrap_or_default()
+    let logs = log_io::scan_gamelogs_dir(&settings.gamelog_dir).unwrap_or_default();
+    let tracked = state.tracked_paths.lock().unwrap();
+
+    logs.into_iter().map(|log| {
+        let is_tracked = tracked.contains(&log.path);
+        CharacterUIState {
+            character: log.character,
+            path: log.path,
+            tracked: is_tracked,
+        }
+    }).collect()
 }
 
 #[tauri::command]
