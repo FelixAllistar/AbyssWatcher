@@ -5,7 +5,6 @@ const selectionContainer = document.getElementById("selection-container");
 const outDpsEl = document.getElementById("out-dps");
 const inDpsEl = document.getElementById("in-dps");
 const activeListEl = document.getElementById("active-list");
-const logEl = document.getElementById("logs");
 const toggleBtn = document.getElementById("toggle-settings");
 
 // Settings Elements
@@ -20,8 +19,6 @@ const cancelSettingsBtn = document.getElementById("cancel-settings");
 let characters = [];
 
 async function init() {
-  logToScreen("Initializing...");
-
   // Toggle settings visibility
   toggleBtn.onclick = () => {
     selectionContainer.classList.toggle("hidden");
@@ -45,7 +42,7 @@ async function init() {
             logDirInput.value = path;
         }
       } catch (e) {
-          logToScreen("Error picking dir: " + e);
+          console.error("Error picking dir:", e);
       }
   };
 
@@ -57,12 +54,11 @@ async function init() {
       try {
           await invoke("save_settings", { settings: newSettings });
           settingsModal.classList.add("hidden");
-          logToScreen("Settings saved!");
           // Refresh characters as the directory might have changed
           characters = await invoke("get_available_characters");
           renderSelection();
       } catch (e) {
-          logToScreen("Error saving: " + e);
+          console.error("Error saving settings:", e);
       }
   };
 
@@ -76,7 +72,7 @@ async function init() {
     logDirInput.value = settings.gamelog_dir;
     dpsWindowInput.value = settings.dps_window_seconds;
   } catch (e) {
-    logToScreen("Error loading settings: " + JSON.stringify(e));
+    console.error("Error loading settings:", e);
   }
 
   // 2. Get available characters (using the loaded settings path)
@@ -84,7 +80,7 @@ async function init() {
     characters = await invoke("get_available_characters");
     renderSelection();
   } catch (e) {
-    logToScreen("Error getting chars: " + JSON.stringify(e));
+    console.error("Error getting chars:", e);
   }
 
   // 3. Listen for DPS updates
@@ -94,7 +90,7 @@ async function init() {
 
   // 4. Listen for backend logs
   await listen("backend-log", (event) => {
-    logToScreen(event.payload);
+    console.log("Backend:", event.payload);
   });
 }
 
