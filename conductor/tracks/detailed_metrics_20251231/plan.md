@@ -13,7 +13,7 @@ Display weapon and target breakdowns.
 - [x] Task: Add Sort & Filter Logic cac7c31
 - [x] Task: Conductor - User Manual Verification 'Detailed Metrics'
 
-## Phase 3: Final Polish [~]
+## Phase 3: Final Polish [checkpoint: 841609f]
 Verify visibility and layout.
 
 - [x] Task: Verify Pilot Name Visibility af2827d
