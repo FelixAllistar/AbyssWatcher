@@ -86,117 +86,14 @@ try {
     } catch (e) { console.error(e); }
 
     // 3. Listen
-    await listen("dps-update", (e) => updateUI(e.payload));
+    await listen("dps-update", (e) => Components.updateUI(els, e.payload, characters));
   }
 
   function renderSelection() {
-    els.selectionContainer.innerHTML = "";
-    if (characters.length === 0) {
-        els.selectionContainer.innerHTML = "<div style='padding:4px; color:#aaa'>No logs found.</div>";
-        return;
-    }
-    characters.forEach(char => {
-        const div = document.createElement("div");
-        div.className = "char-row";
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.checked = char.tracked;
-        checkbox.onchange = () => {
-            char.tracked = checkbox.checked;
-            invoke("toggle_tracking", { path: char.path });
-        };
-        div.appendChild(checkbox);
-        div.appendChild(document.createTextNode(char.character));
-        els.selectionContainer.appendChild(div);
+    Components.renderSelection(els.selectionContainer, characters, (char, isChecked) => {
+        char.tracked = isChecked;
+        invoke("toggle_tracking", { path: char.path });
     });
-  }
-
-  // Style Constants
-  const STYLES = {
-    damage: { color: "#ff6b6b", label: "DPS" },
-    repair: { color: "#6bff6b", label: "HPS" },
-    cap: { color: "#6b6bff", label: "GJ/s" },
-    neut: { color: "#d26bff", label: "GJ/s" }, // Purpleish
-    default: { color: "#aaa", label: "" }
-  };
-
-  function updateUI(data) {
-    els.outDps.textContent = data.outgoing_dps.toFixed(1);
-    els.inDps.textContent = data.incoming_dps.toFixed(1);
-    els.outHps.textContent = (data.outgoing_hps || 0).toFixed(1);
-    els.inHps.textContent = (data.incoming_hps || 0).toFixed(1);
-    els.outCap.textContent = (data.outgoing_cap || 0).toFixed(1);
-    els.inCap.textContent = (data.incoming_cap || 0).toFixed(1);
-    els.outNeut.textContent = (data.outgoing_neut || 0).toFixed(1);
-    els.inNeut.textContent = (data.incoming_neut || 0).toFixed(1);
-
-    // Active List
-    let html = "";
-    
-    // Convert data to Map for easy lookup
-    const activeData = new Map(Object.entries(data.combat_actions_by_character || {}));
-
-    // Merge tracked characters that are inactive
-    characters.forEach(char => {
-        if (char.tracked && !activeData.has(char.character)) {
-            activeData.set(char.character, []);
-        }
-    });
-
-    const chars = Array.from(activeData.entries());
-    
-    // Sort logic: Alphabetical by character name
-    chars.sort((a, b) => a[0].localeCompare(b[0]));
-
-    chars.forEach(([name, actions]) => {
-        // Calculate totals by type
-        let dps = 0, hps = 0, cap = 0, neut = 0;
-        actions.forEach(act => {
-            if (act.action_type === "Damage") dps += act.value;
-            else if (act.action_type === "Repair") hps += act.value;
-            else if (act.action_type === "Capacitor") cap += act.value;
-            else if (act.action_type === "Neut") neut += act.value;
-        });
-
-        // Build Header with Badges
-        let headerBadges = "";
-        if (dps > 0 || (hps===0 && cap===0 && neut===0)) headerBadges += `<span style="color:${STYLES.damage.color}; margin-left:6px">${dps.toFixed(1)}</span>`;
-        if (hps > 0) headerBadges += `<span style="color:${STYLES.repair.color}; margin-left:6px">REP ${hps.toFixed(1)}</span>`;
-        if (cap > 0) headerBadges += `<span style="color:${STYLES.cap.color}; margin-left:6px">CAP ${cap.toFixed(1)}</span>`;
-        if (neut > 0) headerBadges += `<span style="color:${STYLES.neut.color}; margin-left:6px">NEUT ${neut.toFixed(1)}</span>`;
-
-        html += `<div style="margin-bottom:6px; border-bottom:1px solid rgba(255,255,255,0.05)">
-          <div style="display:flex; justify-content:space-between; font-weight:700">
-            <span>${name}</span>
-            <div>${headerBadges}</div>
-          </div>`;
-        
-        // Actions
-        // Sort actions by value descending
-        actions.sort((a, b) => b.value - a.value);
-        
-        actions.forEach(act => {
-            let style = STYLES.default;
-
-            if (act.action_type === "Damage") {
-                style = STYLES.damage;
-            } else if (act.action_type === "Repair") {
-                style = STYLES.repair;
-            } else if (act.action_type === "Capacitor") {
-                style = STYLES.cap;
-            } else if (act.action_type === "Neut") {
-                style = STYLES.neut;
-            }
-
-            html += `<div style="font-size:9px; color:${style.color}; display:flex; justify-content:space-between; align-items:center">
-              <span>${act.name}</span>
-              <span>${act.value.toFixed(1)} <span style="font-size:7px; opacity:0.7">${style.label}</span></span>
-            </div>`;
-        });
-        html += `</div>`;
-    });
-    
-    els.activeList.innerHTML = html;
   }
 
   init();
