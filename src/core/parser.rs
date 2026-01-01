@@ -275,9 +275,9 @@ fn split_entities_and_weapon(
                 }
             }
             
-            let target = text;
+            let target = text.trim_end_matches(" -").trim().to_string();
             if target.is_empty() { return None; }
-            Some((listener.to_string(), target.to_string(), weapon))
+            Some((listener.to_string(), target, weapon))
         }
         Direction::Incoming => {
             let mut text = text_part.trim();
@@ -301,9 +301,9 @@ fn split_entities_and_weapon(
                 }
             }
 
-            let source = text;
+            let source = text.trim_end_matches(" -").trim().to_string();
             if source.is_empty() { return None; }
-            Some((source.to_string(), listener.to_string(), weapon))
+            Some((source, listener.to_string(), weapon))
         }
     }
 }
