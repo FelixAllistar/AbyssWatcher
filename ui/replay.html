@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Replay Suite - AbyssWatcher</title>
+  <style>
+    :root {
+      --bg-color: rgba(15, 15, 20, 0.95);
+      --accent-out: #00d2ff;
+      --accent-in: #ff5e5e;
+      --text-main: #ffffff;
+      --text-dim: #94a3b8;
+      --border-color: rgba(255, 255, 255, 0.1);
+      --font-stack: 'Inter', sans-serif;
+    }
+
+    body {
+      margin: 0;
+      background-color: transparent;
+      color: var(--text-main);
+      font-family: var(--font-stack);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      flex-grow: 1;
+      background-color: var(--bg-color);
+      padding: 10px;
+      overflow: hidden;
+    }
+
+    #header {
+        display: flex; justify-content: space-between; align-items: center; 
+        padding-bottom: 8px; border-bottom: 1px solid var(--border-color);
+        margin-bottom: 8px;
+    }
+    h1 { margin: 0; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: var(--text-dim); }
+
+    .icon-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      color: var(--text-dim);
+      padding: 4px 10px;
+      font-size: 11px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .icon-btn:hover { background: rgba(255, 255, 255, 0.1); color: var(--text-main); }
+    
+    #session-panel {
+        margin-bottom: 10px;
+    }
+    #session-path {
+        font-size: 10px; color: var(--text-dim); margin-bottom: 4px; 
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .dps-summary { display: flex; gap: 8px; justify-content: space-around; margin-bottom: 10px; }
+    .dps-box { text-align: center; flex: 1; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 4px; }
+    .label-header { font-size: 9px; font-weight: 800; color: var(--text-dim); display: block; }
+    .sub-values { display: flex; justify-content: center; gap: 6px; }
+    .value { font-size: 18px; font-weight: 800; }
+    .out { color: var(--accent-out); }
+    .in { color: var(--accent-in); }
+    .sub-label { font-size: 7px; opacity: 0.5; display: block; }
+
+    #active-list { flex-grow: 1; overflow-y: auto; font-size: 11px; border-top: 1px solid var(--border-color); padding-top: 8px; }
+
+    #replay-controls {
+        height: 48px;
+        border-top: 1px solid var(--border-color);
+        background: rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        gap: 12px;
+        flex-shrink: 0;
+    }
+    
+    #play-pause-btn { min-width: 60px; font-weight: bold; }
+    
+    #timeline-container { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; }
+    #timeline { width: 100%; cursor: pointer; }
+    
+    #time-display { font-family: monospace; font-size: 12px; color: var(--accent-out); min-width: 100px; text-align: right;}
+    
+    select { background: rgba(0,0,0,0.5); border: 1px solid var(--border-color); color: white; padding: 2px; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="header">
+      <h1>Replay Suite</h1>
+      <button id="browse-btn" class="icon-btn">Open Folder...</button>
+    </div>
+
+    <div id="session-panel">
+        <div id="session-path">Loading...</div>
+        <select id="session-select" style="width: 100%; max-width: 400px; margin-top: 4px;">
+            <option value="">Select a Session...</option>
+        </select>
+    </div>
+
+    <div id="data-container" style="flex-grow: 1; display: flex; flex-direction: column; overflow: hidden;">
+      <div class="dps-summary">
+        <div class="dps-box">
+          <span class="label-header">DPS</span>
+          <div class="sub-values">
+            <div class="sub-val"><span class="sub-label">OUT</span><span id="out-dps" class="value out">0.0</span></div>
+            <div class="sub-val"><span class="sub-label">IN</span><span id="in-dps" class="value in">0.0</span></div>
+          </div>
+        </div>
+        <div class="dps-box">
+          <span class="label-header">REP</span>
+          <div class="sub-values">
+            <div class="sub-val"><span class="sub-label">OUT</span><span id="out-hps" class="value out" style="color:#a3e635">0.0</span></div>
+            <div class="sub-val"><span class="sub-label">IN</span><span id="in-hps" class="value in" style="color:#4ade80">0.0</span></div>
+          </div>
+        </div>
+        <div class="dps-box">
+          <span class="label-header">CAP</span>
+          <div class="sub-values">
+            <div class="sub-val"><span class="sub-label">OUT</span><span id="out-cap" class="value out" style="color:#facc15">0.0</span></div>
+            <div class="sub-val"><span class="sub-label">IN</span><span id="in-cap" class="value in" style="color:#fbbf24">0.0</span></div>
+          </div>
+        </div>
+        <div class="dps-box">
+          <span class="label-header">NEUT</span>
+          <div class="sub-values">
+            <div class="sub-val"><span class="sub-label">OUT</span><span id="out-neut" class="value out" style="color:#c084fc">0.0</span></div>
+            <div class="sub-val"><span class="sub-label">IN</span><span id="in-neut" class="value in" style="color:#a855f7">0.0</span></div>
+          </div>
+        </div>
+      </div>
+      <div id="active-list"></div>
+    </div>
+  </div>
+
+  <div id="replay-controls">
+    <button id="play-pause-btn" class="icon-btn">Play</button>
+    
+    <div id="timeline-container">
+        <input type="range" id="timeline" min="0" max="100" value="0" step="1">
+    </div>
+    
+    <span id="time-display">00:00 / 00:00</span>
+    
+    <select id="speed-select">
+        <option value="0.5">0.5x</option>
+        <option value="1.0" selected>1.0x</option>
+        <option value="2.0">2.0x</option>
+        <option value="5.0">5.0x</option>
+        <option value="10.0">10.0x</option>
+    </select>
+  </div>
+
+  <script src="components.js"></script>
+  <script src="replay.js"></script>
+</body>
+</html>

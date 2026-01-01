@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{Emitter, Manager, State};
+use tauri::{Emitter, Manager, State, WebviewWindowBuilder, WebviewUrl};
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::mpsc;
 use abyss_watcher::core::{log_io, coordinator, config::{ConfigManager, Settings}};
@@ -16,6 +16,24 @@ struct AppState {
     settings: Mutex<Settings>,
     config_manager: ConfigManager,
     loop_tx: mpsc::Sender<LoopCommand>,
+}
+
+#[tauri::command]
+async fn open_replay_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("replay") {
+        window.set_focus().map_err(|e| e.to_string())?;
+    } else {
+        WebviewWindowBuilder::new(
+            &app,
+            "replay",
+            WebviewUrl::App("replay.html".into())
+        )
+        .title("AbyssWatcher - Replay")
+        .inner_size(800.0, 600.0)
+        .build()
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -163,7 +181,8 @@ pub fn run() {
             get_settings,
             save_settings,
             pick_gamelog_dir,
-            replay_logs
+            replay_logs,
+            open_replay_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

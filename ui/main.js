@@ -70,7 +70,7 @@ try {
 
     els.replayBtn.onclick = async () => {
         try {
-            await invoke("replay_logs");
+            await invoke("open_replay_window");
             els.settingsModal.classList.add("hidden");
         } catch (e) { console.error(e); }
     };
