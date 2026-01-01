@@ -132,7 +132,8 @@ function updateUI(data) {
         // Weapons Breakdown
         const weapons = Object.entries(data.outgoing_by_char_weapon[name] || {});
         if (weapons.length > 0) {
-            weapons.sort((a, b) => b[1] - a[1]);
+            // Sort Alphabetically by Weapon Name to prevent UI jumping
+            weapons.sort((a, b) => a[0].localeCompare(b[0]));
             html += `<div class="breakdown-list">`;
             weapons.forEach(([weapon, weaponDps]) => {
                 html += `<div class="breakdown-item"><span>${weapon}</span><span>${weaponDps.toFixed(1)}</span></div>`;
@@ -143,7 +144,8 @@ function updateUI(data) {
         // Targets Breakdown (Top 3)
         const targets = Object.entries(data.outgoing_by_char_target[name] || {});
         if (targets.length > 0) {
-            targets.sort((a, b) => b[1] - a[1]);
+            // Sort Alphabetically by Target Name
+            targets.sort((a, b) => a[0].localeCompare(b[0]));
             html += `<div class="breakdown-list targets">`;
             targets.slice(0, 3).forEach(([target, targetDps]) => {
                 html += `<div class="breakdown-item"><span>» ${target}</span><span>${targetDps.toFixed(1)}</span></div>`;
