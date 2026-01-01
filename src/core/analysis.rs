@@ -44,8 +44,11 @@ pub fn compute_dps_series(
             outgoing_dps: 0.0,
             incoming_dps: 0.0,
             outgoing_hps: 0.0,
+            incoming_hps: 0.0,
             outgoing_cap: 0.0,
+            incoming_cap: 0.0,
             outgoing_neut: 0.0,
+            incoming_neut: 0.0,
             outgoing_by_weapon: HashMap::<WeaponName, f32>::new(),
             outgoing_by_target: HashMap::<EntityName, f32>::new(),
             incoming_by_source: HashMap::<EntityName, f32>::new(),
@@ -64,8 +67,11 @@ pub fn compute_dps_series(
     let mut outgoing_sum = 0.0_f32;
     let mut incoming_sum = 0.0_f32;
     let mut outgoing_hps_sum = 0.0_f32;
+    let mut incoming_hps_sum = 0.0_f32;
     let mut outgoing_cap_sum = 0.0_f32;
+    let mut incoming_cap_sum = 0.0_f32;
     let mut outgoing_neut_sum = 0.0_f32;
+    let mut incoming_neut_sum = 0.0_f32;
     
     let mut outgoing_by_weapon_damage: HashMap<WeaponName, f32> = HashMap::new();
     let mut outgoing_by_target_damage: HashMap<EntityName, f32> = HashMap::new();
@@ -87,15 +93,19 @@ pub fn compute_dps_series(
         {
             let event = &events[end_idx];
             if event.incoming {
-                // Incoming logic remains focused on damage for now
-                if event.event_type == EventType::Damage {
-                    incoming_sum += event.amount;
-                    *incoming_by_source_damage
-                        .entry(event.source.clone())
-                        .or_insert(0.0) += event.amount;
-                    *incoming_by_character_damage
-                        .entry(event.character.clone())
-                        .or_insert(0.0) += event.amount;
+                match event.event_type {
+                    EventType::Damage => {
+                        incoming_sum += event.amount;
+                        *incoming_by_source_damage
+                            .entry(event.source.clone())
+                            .or_insert(0.0) += event.amount;
+                        *incoming_by_character_damage
+                            .entry(event.character.clone())
+                            .or_insert(0.0) += event.amount;
+                    },
+                    EventType::Repair => incoming_hps_sum += event.amount,
+                    EventType::Capacitor => incoming_cap_sum += event.amount,
+                    EventType::Neut => incoming_neut_sum += event.amount,
                 }
             } else {
                 // Outgoing logic
@@ -142,20 +152,25 @@ pub fn compute_dps_series(
         {
             let event = &events[start_idx];
             if event.incoming {
-                if event.event_type == EventType::Damage {
-                    incoming_sum -= event.amount;
-                    if let Some(value) = incoming_by_source_damage.get_mut(&event.source) {
-                        *value -= event.amount;
-                        if *value <= 0.0 {
-                            incoming_by_source_damage.remove(&event.source);
+                match event.event_type {
+                    EventType::Damage => {
+                        incoming_sum -= event.amount;
+                        if let Some(value) = incoming_by_source_damage.get_mut(&event.source) {
+                            *value -= event.amount;
+                            if *value <= 0.0 {
+                                incoming_by_source_damage.remove(&event.source);
+                            }
                         }
-                    }
-                    if let Some(value) = incoming_by_character_damage.get_mut(&event.character) {
-                        *value -= event.amount;
-                        if *value <= 0.0 {
-                            incoming_by_character_damage.remove(&event.character);
+                        if let Some(value) = incoming_by_character_damage.get_mut(&event.character) {
+                            *value -= event.amount;
+                            if *value <= 0.0 {
+                                incoming_by_character_damage.remove(&event.character);
+                            }
                         }
-                    }
+                    },
+                    EventType::Repair => incoming_hps_sum -= event.amount,
+                    EventType::Capacitor => incoming_cap_sum -= event.amount,
+                    EventType::Neut => incoming_neut_sum -= event.amount,
                 }
             } else {
                 match event.event_type {
@@ -221,8 +236,11 @@ pub fn compute_dps_series(
         sample.outgoing_dps = outgoing_sum / window_seconds;
         sample.incoming_dps = incoming_sum / window_seconds;
         sample.outgoing_hps = outgoing_hps_sum / window_seconds;
+        sample.incoming_hps = incoming_hps_sum / window_seconds;
         sample.outgoing_cap = outgoing_cap_sum / window_seconds;
+        sample.incoming_cap = incoming_cap_sum / window_seconds;
         sample.outgoing_neut = outgoing_neut_sum / window_seconds;
+        sample.incoming_neut = incoming_neut_sum / window_seconds;
 
         sample.outgoing_by_weapon = outgoing_by_weapon_damage
             .iter()
