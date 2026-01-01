@@ -9,6 +9,8 @@ pub type WeaponName = String;
 pub enum EventType {
     Damage,
     Repair,
+    Capacitor,
+    Neut,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,7 +25,6 @@ pub struct CombatEvent {
     pub event_type: EventType,
 }
 
-// Backwards compatibility alias if needed, or we just refactor all usages of .damage
 impl CombatEvent {
     pub fn damage(&self) -> f32 {
         if self.event_type == EventType::Damage {
@@ -40,6 +41,8 @@ pub struct DpsSample {
     pub outgoing_dps: f32,
     pub incoming_dps: f32,
     pub outgoing_hps: f32, // Healing Per Second
+    pub outgoing_cap: f32, // Capacitor Transferred Per Second
+    pub outgoing_neut: f32, // Energy Neutralized/Drained Per Second
     
     // Detailed breakdowns
     pub outgoing_by_weapon: HashMap<WeaponName, f32>,
