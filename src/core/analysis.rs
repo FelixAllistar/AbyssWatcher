@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use super::model::{CombatEvent, DpsSample, EntityName, WeaponName};
+use super::model::{CombatEvent, DpsSample, EntityName, EventType, WeaponName};
 
 pub fn compute_dps_series(
     events: &[CombatEvent],
@@ -24,7 +24,6 @@ pub fn compute_dps_series(
     let max_millis = std::cmp::max(max_event_timestamp_millis, end_millis);
 
     // Keep at most this much history in the DPS series.
-    // This bounds the amount of work we do per update even in long sessions.
     const HISTORY_MILLIS: u64 = 60_000;
 
     let (start_millis, slot_count) = if max_millis <= HISTORY_MILLIS {
@@ -44,6 +43,7 @@ pub fn compute_dps_series(
             time,
             outgoing_dps: 0.0,
             incoming_dps: 0.0,
+            outgoing_hps: 0.0,
             outgoing_by_weapon: HashMap::<WeaponName, f32>::new(),
             outgoing_by_target: HashMap::<EntityName, f32>::new(),
             incoming_by_source: HashMap::<EntityName, f32>::new(),
@@ -54,17 +54,15 @@ pub fn compute_dps_series(
         });
     }
 
-    // Optimization: Find the starting point in the events list using binary search.
-    // We only care about events that could possibly contribute to the FIRST window in our series.
-    // The first sample is at `start_millis`. Its window is `[start_millis - window, start_millis]`.
     let global_start_cutoff = Duration::from_millis(start_millis.saturating_sub(window_millis));
     
-    // Find the index of the first event >= global_start_cutoff
     let mut start_idx = events.partition_point(|e| e.timestamp < global_start_cutoff);
     let mut end_idx = start_idx;
 
     let mut outgoing_sum = 0.0_f32;
     let mut incoming_sum = 0.0_f32;
+    let mut outgoing_hps_sum = 0.0_f32;
+    
     let mut outgoing_by_weapon_damage: HashMap<WeaponName, f32> = HashMap::new();
     let mut outgoing_by_target_damage: HashMap<EntityName, f32> = HashMap::new();
     let mut incoming_by_source_damage: HashMap<EntityName, f32> = HashMap::new();
@@ -79,103 +77,127 @@ pub fn compute_dps_series(
         let center_millis = start_millis + i as u64 * step_millis;
         let window_start_millis = center_millis.saturating_sub(window_millis);
 
+        // Add events entering the window (from the future relative to window start)
         while end_idx < events.len()
             && events[end_idx].timestamp.as_millis() as u64 <= center_millis
         {
             let event = &events[end_idx];
             if event.incoming {
-                incoming_sum += event.damage;
-                *incoming_by_source_damage
-                    .entry(event.source.clone())
-                    .or_insert(0.0) += event.damage;
-                *incoming_by_character_damage
-                    .entry(event.character.clone())
-                    .or_insert(0.0) += event.damage;
+                // Incoming logic remains focused on damage for now
+                if event.event_type == EventType::Damage {
+                    incoming_sum += event.amount;
+                    *incoming_by_source_damage
+                        .entry(event.source.clone())
+                        .or_insert(0.0) += event.amount;
+                    *incoming_by_character_damage
+                        .entry(event.character.clone())
+                        .or_insert(0.0) += event.amount;
+                }
             } else {
-                outgoing_sum += event.damage;
-                *outgoing_by_weapon_damage
-                    .entry(event.weapon.clone())
-                    .or_insert(0.0) += event.damage;
-                *outgoing_by_target_damage
-                    .entry(event.target.clone())
-                    .or_insert(0.0) += event.damage;
-                *outgoing_by_character_damage
-                    .entry(event.character.clone())
-                    .or_insert(0.0) += event.damage;
-                *outgoing_by_char_weapon_damage
-                    .entry(event.character.clone())
-                    .or_default()
-                    .entry(event.weapon.clone())
-                    .or_insert(0.0) += event.damage;
-                *outgoing_by_char_target_damage
-                    .entry(event.character.clone())
-                    .or_default()
-                    .entry(event.target.clone())
-                    .or_insert(0.0) += event.damage;
+                // Outgoing logic
+                match event.event_type {
+                    EventType::Damage => {
+                        outgoing_sum += event.amount;
+                        *outgoing_by_weapon_damage
+                            .entry(event.weapon.clone())
+                            .or_insert(0.0) += event.amount;
+                        *outgoing_by_target_damage
+                            .entry(event.target.clone())
+                            .or_insert(0.0) += event.amount;
+                        *outgoing_by_character_damage
+                            .entry(event.character.clone())
+                            .or_insert(0.0) += event.amount;
+                        *outgoing_by_char_weapon_damage
+                            .entry(event.character.clone())
+                            .or_default()
+                            .entry(event.weapon.clone())
+                            .or_insert(0.0) += event.amount;
+                        *outgoing_by_char_target_damage
+                            .entry(event.character.clone())
+                            .or_default()
+                            .entry(event.target.clone())
+                            .or_insert(0.0) += event.amount;
+                    },
+                    EventType::Repair => {
+                        outgoing_hps_sum += event.amount;
+                        // For now, we only track total HPS. 
+                        // Detailed breakdowns could be added later if needed.
+                    }
+                }
             }
             end_idx += 1;
         }
 
+        // Remove events leaving the window (falling behind the start time)
         while start_idx < end_idx
             && (events[start_idx].timestamp.as_millis() as u64) < window_start_millis
         {
             let event = &events[start_idx];
             if event.incoming {
-                incoming_sum -= event.damage;
-                if let Some(value) = incoming_by_source_damage.get_mut(&event.source) {
-                    *value -= event.damage;
-                    if *value <= 0.0 {
-                        incoming_by_source_damage.remove(&event.source);
+                if event.event_type == EventType::Damage {
+                    incoming_sum -= event.amount;
+                    if let Some(value) = incoming_by_source_damage.get_mut(&event.source) {
+                        *value -= event.amount;
+                        if *value <= 0.0 {
+                            incoming_by_source_damage.remove(&event.source);
+                        }
                     }
-                }
-                if let Some(value) = incoming_by_character_damage.get_mut(&event.character) {
-                    *value -= event.damage;
-                    if *value <= 0.0 {
-                        incoming_by_character_damage.remove(&event.character);
+                    if let Some(value) = incoming_by_character_damage.get_mut(&event.character) {
+                        *value -= event.amount;
+                        if *value <= 0.0 {
+                            incoming_by_character_damage.remove(&event.character);
+                        }
                     }
                 }
             } else {
-                outgoing_sum -= event.damage;
-                if let Some(value) = outgoing_by_weapon_damage.get_mut(&event.weapon) {
-                    *value -= event.damage;
-                    if *value <= 0.0 {
-                        outgoing_by_weapon_damage.remove(&event.weapon);
-                    }
-                }
-                if let Some(value) = outgoing_by_target_damage.get_mut(&event.target) {
-                    *value -= event.damage;
-                    if *value <= 0.0 {
-                        outgoing_by_target_damage.remove(&event.target);
-                    }
-                }
-                if let Some(value) = outgoing_by_character_damage.get_mut(&event.character) {
-                    *value -= event.damage;
-                    if *value <= 0.0 {
-                        outgoing_by_character_damage.remove(&event.character);
-                    }
-                }
-                if let Some(char_weapons) = outgoing_by_char_weapon_damage.get_mut(&event.character)
-                {
-                    if let Some(damage) = char_weapons.get_mut(&event.weapon) {
-                        *damage -= event.damage;
-                        if *damage <= 0.0 {
-                            char_weapons.remove(&event.weapon);
+                match event.event_type {
+                    EventType::Damage => {
+                        outgoing_sum -= event.amount;
+                        if let Some(value) = outgoing_by_weapon_damage.get_mut(&event.weapon) {
+                            *value -= event.amount;
+                            if *value <= 0.0 {
+                                outgoing_by_weapon_damage.remove(&event.weapon);
+                            }
                         }
-                    }
-                    if char_weapons.is_empty() {
-                        outgoing_by_char_weapon_damage.remove(&event.character);
-                    }
-                }
-                if let Some(char_targets) = outgoing_by_char_target_damage.get_mut(&event.character)
-                {
-                    if let Some(damage) = char_targets.get_mut(&event.target) {
-                        *damage -= event.damage;
-                        if *damage <= 0.0 {
-                            char_targets.remove(&event.target);
+                        if let Some(value) = outgoing_by_target_damage.get_mut(&event.target) {
+                            *value -= event.amount;
+                            if *value <= 0.0 {
+                                outgoing_by_target_damage.remove(&event.target);
+                            }
                         }
-                    }
-                    if char_targets.is_empty() {
-                        outgoing_by_char_target_damage.remove(&event.character);
+                        if let Some(value) = outgoing_by_character_damage.get_mut(&event.character) {
+                            *value -= event.amount;
+                            if *value <= 0.0 {
+                                outgoing_by_character_damage.remove(&event.character);
+                            }
+                        }
+                        if let Some(char_weapons) = outgoing_by_char_weapon_damage.get_mut(&event.character)
+                        {
+                            if let Some(damage) = char_weapons.get_mut(&event.weapon) {
+                                *damage -= event.amount;
+                                if *damage <= 0.0 {
+                                    char_weapons.remove(&event.weapon);
+                                }
+                            }
+                            if char_weapons.is_empty() {
+                                outgoing_by_char_weapon_damage.remove(&event.character);
+                            }
+                        }
+                        if let Some(char_targets) = outgoing_by_char_target_damage.get_mut(&event.character)
+                        {
+                            if let Some(damage) = char_targets.get_mut(&event.target) {
+                                *damage -= event.amount;
+                                if *damage <= 0.0 {
+                                    char_targets.remove(&event.target);
+                                }
+                            }
+                            if char_targets.is_empty() {
+                                outgoing_by_char_target_damage.remove(&event.character);
+                            }
+                        }
+                    },
+                    EventType::Repair => {
+                        outgoing_hps_sum -= event.amount;
                     }
                 }
             }
@@ -184,6 +206,7 @@ pub fn compute_dps_series(
 
         sample.outgoing_dps = outgoing_sum / window_seconds;
         sample.incoming_dps = incoming_sum / window_seconds;
+        sample.outgoing_hps = outgoing_hps_sum / window_seconds;
 
         sample.outgoing_by_weapon = outgoing_by_weapon_damage
             .iter()
@@ -242,7 +265,7 @@ mod tests {
 
     fn make_event(
         seconds: u64,
-        damage: f32,
+        amount: f32,
         incoming: bool,
         source: &str,
         target: &str,
@@ -252,9 +275,10 @@ mod tests {
             source: source.to_string(),
             target: target.to_string(),
             weapon: "Test".to_string(),
-            damage,
+            amount,
             incoming,
             character: source.to_string(),
+            event_type: EventType::Damage,
         }
     }
 
@@ -287,18 +311,20 @@ mod tests {
                 source: "PilotA".to_string(),
                 target: "Enemy1".to_string(),
                 weapon: "Lasers".to_string(),
-                damage: 100.0,
+                amount: 100.0,
                 incoming: false,
                 character: "PilotA".to_string(),
+                event_type: EventType::Damage,
             },
             CombatEvent {
                 timestamp: Duration::from_secs(1),
                 source: "PilotB".to_string(),
                 target: "Enemy2".to_string(),
                 weapon: "Missiles".to_string(),
-                damage: 50.0,
+                amount: 50.0,
                 incoming: false,
                 character: "PilotB".to_string(),
+                event_type: EventType::Damage,
             },
         ];
         events.sort_by_key(|event| event.timestamp.as_millis());
@@ -326,5 +352,30 @@ mod tests {
         let b_targets = sample.outgoing_by_char_target.get("PilotB").unwrap();
         assert!(b_targets.contains_key("Enemy2"));
         assert!(!b_targets.contains_key("Enemy1"));
+    }
+
+    #[test]
+    fn calculates_hps_separately() {
+        let mut events = vec![
+            // Damage Event
+            make_event(1, 100.0, false, "Pilot", "Enemy"),
+            // Repair Event
+            CombatEvent {
+                timestamp: Duration::from_secs(1),
+                source: "Pilot".to_string(),
+                target: "Friend".to_string(),
+                weapon: "Remote Rep".to_string(),
+                amount: 50.0,
+                incoming: false,
+                character: "Pilot".to_string(),
+                event_type: EventType::Repair,
+            }
+        ];
+        
+        let samples = compute_dps_series(&events, Duration::from_secs(1), Duration::from_secs(1));
+        let sample = &samples[1];
+
+        assert_eq!(sample.outgoing_dps, 100.0);
+        assert_eq!(sample.outgoing_hps, 50.0);
     }
 }

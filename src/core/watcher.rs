@@ -125,7 +125,7 @@ mod tests {
         // 4. Read events again
         let (events, msgs) = watcher.read_events();
         assert_eq!(events.len(), 1);
-        assert_eq!(events[0].damage, 100.0);
+        assert_eq!(events[0].amount, 100.0);
         assert!(msgs[0].contains("Read 1 new events"));
 
         // 5. Remove path

@@ -40,7 +40,7 @@ impl EngineState {
         self.events
             .iter()
             .filter(|event| !event.incoming)
-            .map(|event| event.damage)
+            .map(|event| event.amount)
             .sum()
     }
 
@@ -57,7 +57,7 @@ impl EngineState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::model::CombatEvent;
+    use crate::core::model::{CombatEvent, EventType};
 
     fn make_event(timestamp_secs: u64, character: &str) -> CombatEvent {
         CombatEvent {
@@ -65,9 +65,10 @@ mod tests {
             source: "Source".to_string(),
             target: "Target".to_string(),
             weapon: "Weapon".to_string(),
-            damage: 100.0,
+            amount: 100.0,
             incoming: false,
             character: character.to_string(),
+            event_type: EventType::Damage,
         }
     }
 

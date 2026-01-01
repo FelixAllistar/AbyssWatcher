@@ -43,4 +43,22 @@ mod tests {
         // 500ms is a safe threshold for CI/local runs.
         assert!(duration < Duration::from_millis(1000), "Performance is too slow! took {:?}", duration);
     }
-}
+
+    use crate::core::model::EventType;
+
+    fn generate_large_history(count: usize) -> Vec<CombatEvent> {
+        let mut events = Vec::with_capacity(count);
+        for i in 0..count {
+            events.push(CombatEvent {
+                timestamp: Duration::from_millis(i as u64 * 10), // 10ms gap
+                source: "Player".to_string(),
+                target: "Enemy".to_string(),
+                weapon: "Gun".to_string(),
+                amount: 10.0,
+                incoming: false,
+                character: "Char1".to_string(),
+                event_type: EventType::Damage,
+            });
+        }
+        events
+    }
