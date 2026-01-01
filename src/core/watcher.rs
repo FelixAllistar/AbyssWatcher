@@ -67,7 +67,6 @@ impl LogWatcher {
             match tracker.read_new_events() {
                 Ok(new_events) => {
                     if !new_events.is_empty() {
-                        messages.push(format!("Read {} new events for {}", new_events.len(), tracker.source));
                         all_events.extend(new_events);
                     }
                 }

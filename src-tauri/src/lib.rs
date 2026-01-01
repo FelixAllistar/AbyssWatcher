@@ -75,10 +75,8 @@ fn get_available_characters(state: State<'_, AppState>) -> Vec<CharacterUIState>
 fn toggle_tracking(path: PathBuf, state: State<'_, AppState>) {
     let mut tracked = state.tracked_paths.lock().unwrap();
     if tracked.contains(&path) {
-        println!("Stopping tracking for: {:?}", path);
         tracked.remove(&path);
     } else {
-        println!("Requested tracking for: {:?}", path);
         tracked.insert(path);
     }
 }
@@ -118,14 +116,12 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 let mut current_log_dir = initial_settings.gamelog_dir.clone();
                 let mut coordinator = coordinator::Coordinator::new(current_log_dir.clone());
-                println!("Background watcher started. Monitoring: {:?}", current_log_dir);
 
                 loop {
                     // Check for commands from the frontend
                     while let Ok(cmd) = rx.try_recv() {
                         match cmd {
                             LoopCommand::Replay => {
-                                println!("Replaying logs...");
                                 coordinator.replay_logs();
                             }
                         }
@@ -141,7 +137,6 @@ pub fn run() {
 
                     // Hot-reload: Check if log directory changed
                     if current_settings.gamelog_dir != current_log_dir {
-                        println!("Log directory changed to: {:?}", current_settings.gamelog_dir);
                         current_log_dir = current_settings.gamelog_dir.clone();
                         coordinator = coordinator::Coordinator::new(current_log_dir.clone());
                     }
@@ -150,12 +145,6 @@ pub fn run() {
                     let dps_window = Duration::from_secs(current_settings.dps_window_seconds);
 
                     let output = coordinator.tick(&active_paths, dps_window);
-
-                    // Emit logs
-                    for msg in output.logs {
-                        println!("{}", msg);
-                        let _ = handle.emit("backend-log", msg);
-                    }
 
                     // Emit DPS
                     if let Some(sample) = output.dps_sample {
