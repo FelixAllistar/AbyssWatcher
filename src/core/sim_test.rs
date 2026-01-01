@@ -37,10 +37,10 @@ mod sim_tests {
 
         assert_eq!(events_a.len(), 1);
         assert_eq!(events_a[0].character, "PilotA");
-        assert_eq!(events_a[0].damage, 100.0);
+        assert_eq!(events_a[0].amount, 100.0);
 
         assert_eq!(events_b.len(), 1);
         assert_eq!(events_b[0].character, "PilotB");
-        assert_eq!(events_b[0].damage, 50.0);
+        assert_eq!(events_b[0].amount, 50.0);
     }
 }
