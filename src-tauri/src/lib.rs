@@ -37,6 +37,20 @@ async fn open_replay_window(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn get_replay_sessions(path: Option<PathBuf>, state: State<'_, AppState>) -> Result<Vec<log_io::Session>, String> {
+    let target_dir = if let Some(p) = path {
+        p
+    } else {
+        let settings = state.settings.lock().unwrap();
+        settings.gamelog_dir.clone()
+    };
+
+    let logs = log_io::scan_all_logs(&target_dir).map_err(|e| e.to_string())?;
+    let sessions = log_io::group_sessions(logs);
+    Ok(sessions)
+}
+
+#[tauri::command]
 async fn replay_logs(state: State<'_, AppState>) -> Result<(), String> {
     state.loop_tx.send(LoopCommand::Replay).await.map_err(|e| e.to_string())
 }
@@ -182,7 +196,8 @@ pub fn run() {
             save_settings,
             pick_gamelog_dir,
             replay_logs,
-            open_replay_window
+            open_replay_window,
+            get_replay_sessions
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
