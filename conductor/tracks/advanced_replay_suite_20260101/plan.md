@@ -5,7 +5,7 @@
 - [x] Task: Create `ui/replay.html` and `ui/replay.js` as the entry point for the new window. cfdd8a1
 - [x] Task: Implement a Tauri command `open_replay_window` that spawns the secondary window. cfdd8a1
 - [x] Task: Ensure the Replay window can fetch the current `gamelog_dir` from the backend settings. cfdd8a1
-- [ ] Task: Conductor - User Manual Verification 'Infrastructure & Componentization' (Protocol in workflow.md)
+- [ ] Task: Conductor - User Manual Verification 'Infrastructure & Componentization' (Protocol in workflow.md) [checkpoint: adf52fe]
 
 ## Phase 2: Log Discovery & Session Grouping
 - [ ] Task: Implement `core::log_io::discover_sessions` to scan a directory and extract character names from log headers.
