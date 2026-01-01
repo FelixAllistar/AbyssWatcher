@@ -15,10 +15,10 @@
 - [x] Task: Conductor - User Manual Verification 'Log Discovery & Session Grouping' (Protocol in workflow.md) [checkpoint: fddc62e]
 
 ## Phase 3: Synchronized Playback Engine
-- [ ] Task: Create `core::replay_engine::MergedStream` to read multiple log files and yield lines in chronological order.
-- [ ] Task: Implement `core::replay_engine::ReplayController` to manage playback state (Play/Pause, Speed Multiplier, Manual Ticking).
-- [ ] Task: Implement the "Live Simulation" timer logic in the backend to push updates to the frontend at the correct relative intervals.
-- [ ] Task: Connect the Replay Engine to the existing `core::analysis` logic to produce DPS/HPS metrics.
+- [x] Task: Create `core::replay_engine::MergedStream` to read multiple log files and yield lines in chronological order. 1d3464d
+- [x] Task: Implement `core::replay_engine::ReplayController` to manage playback state (Play/Pause, Speed Multiplier, Manual Ticking). 1d3464d
+- [x] Task: Implement the "Live Simulation" timer logic in the backend to push updates to the frontend at the correct relative intervals. 1d3464d
+- [x] Task: Connect the Replay Engine to the existing `core::analysis` logic to produce DPS/HPS metrics. 1d3464d
 - [ ] Task: Conductor - User Manual Verification 'Synchronized Playback Engine' (Protocol in workflow.md)
 
 ## Phase 4: Advanced Controls & Debugging
