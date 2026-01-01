@@ -246,19 +246,91 @@
       padding-top: 6px;
     }
 
-    .active-char {
-      display: flex;
-      justify-content: space-between;
-      padding: 3px 6px;
-      border-radius: 4px;
-    }
-    .active-char:nth-child(even) {
-      background: rgba(255, 255, 255, 0.02);
-    }
-    .active-char span { color: var(--text-dim); }
-    .active-char strong { color: var(--accent-out); font-weight: 700; }
+        .active-char {
 
-  </style>
+          display: flex;
+
+          justify-content: space-between;
+
+          padding: 3px 6px;
+
+          border-radius: 4px;
+
+        }
+
+        .active-char span { 
+
+          color: var(--text-main); 
+
+          font-weight: 700;
+
+          text-shadow: 0 0 10px rgba(255,255,255,0.1);
+
+        }
+
+        .active-char strong { color: var(--accent-out); font-weight: 800; }
+
+    
+
+        /* Detail Breakdowns */
+
+        .char-section {
+
+          margin-bottom: 8px;
+
+          border-bottom: 1px solid rgba(255,255,255,0.02);
+
+          padding-bottom: 4px;
+
+        }
+
+        .char-section:last-child { border-bottom: none; }
+
+    
+
+        .breakdown-list {
+
+          padding: 0 8px 0 16px;
+
+          margin-top: 2px;
+
+        }
+
+        .breakdown-item {
+
+          display: flex;
+
+          justify-content: space-between;
+
+          font-size: 9px;
+
+          color: var(--text-dim);
+
+          line-height: 1.4;
+
+          opacity: 0.7;
+
+        }
+
+        .breakdown-item span:last-child {
+
+          font-variant-numeric: tabular-nums;
+
+          font-weight: 600;
+
+        }
+
+        .targets {
+
+          margin-top: 4px;
+
+          border-top: 1px inset rgba(255,255,255,0.03);
+
+          padding-top: 2px;
+
+        }
+
+      </style>
 </head>
 <body>
   <div id="app">

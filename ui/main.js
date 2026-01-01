@@ -122,20 +122,39 @@ function updateUI(data) {
   // Update per-character breakdown
   let html = "";
   const chars = Object.entries(data.outgoing_by_character);
-  if (chars.length > 1) {
+  
+  if (chars.length > 0) {
       chars.sort((a, b) => b[1] - a[1]);
       chars.forEach(([name, dps]) => {
-        html += `<div class="active-char"><span>${name}</span><strong>${dps.toFixed(1)}</strong></div>`;
+        html += `<div class="char-section">
+          <div class="active-char"><span>${name}</span><strong>${dps.toFixed(1)}</strong></div>`;
+        
+        // Weapons Breakdown
+        const weapons = Object.entries(data.outgoing_by_char_weapon[name] || {});
+        if (weapons.length > 0) {
+            weapons.sort((a, b) => b[1] - a[1]);
+            html += `<div class="breakdown-list">`;
+            weapons.forEach(([weapon, weaponDps]) => {
+                html += `<div class="breakdown-item"><span>${weapon}</span><span>${weaponDps.toFixed(1)}</span></div>`;
+            });
+            html += `</div>`;
+        }
+
+        // Targets Breakdown (Top 3)
+        const targets = Object.entries(data.outgoing_by_char_target[name] || {});
+        if (targets.length > 0) {
+            targets.sort((a, b) => b[1] - a[1]);
+            html += `<div class="breakdown-list targets">`;
+            targets.slice(0, 3).forEach(([target, targetDps]) => {
+                html += `<div class="breakdown-item"><span>» ${target}</span><span>${targetDps.toFixed(1)}</span></div>`;
+            });
+            html += `</div>`;
+        }
+
+        html += `</div>`;
       });
   }
   activeListEl.innerHTML = html;
-}
-
-function logToScreen(msg) {
-    const p = document.createElement("div");
-    p.textContent = msg;
-    logEl.prepend(p);
-    if (logEl.children.length > 5) logEl.lastChild.remove();
 }
 
 init();
