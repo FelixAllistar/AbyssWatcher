@@ -3,10 +3,11 @@ try {
   const { invoke } = window.__TAURI__.core;
 
   const els = {
+    toggleLogsBtn: document.getElementById("toggle-logs"),
     browseBtn: document.getElementById("browse-btn"),
     sessionPath: document.getElementById("session-path"),
-    sessionSelect: document.getElementById("session-select"),
-    sessionDetails: document.getElementById("session-details"),
+    sessionList: document.getElementById("session-list"),
+    sessionPanel: document.getElementById("session-panel"),
     
     playPauseBtn: document.getElementById("play-pause-btn"),
     timeline: document.getElementById("timeline"),
@@ -25,37 +26,86 @@ try {
   };
 
   // State
-  let currentSessions = [];
+  let characters = {}; // Grouped logs
   let isPlaying = false;
   let currentLogDir = "";
 
-  async function refreshSessions(dir) {
+  function renderLogRow(log) {
+    const logRow = document.createElement("div");
+    logRow.style.display = "flex";
+    logRow.style.alignItems = "center";
+    logRow.style.fontSize = "10px";
+    logRow.style.marginBottom = "2px";
+    
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.style.marginRight = "6px";
+    cb.checked = log.enabled || false;
+    cb.onchange = () => {
+        log.enabled = cb.checked;
+    };
+    
+    const secs = log.session_start.secs_since_epoch;
+    const date = new Date(secs * 1000);
+    const label = document.createElement("span");
+    label.textContent = date.toLocaleString();
+    
+    logRow.appendChild(cb);
+    logRow.appendChild(label);
+    return logRow;
+  }
+
+  async function refreshLogs(dir) {
     els.sessionPath.textContent = "Scanning...";
-    els.sessionSelect.innerHTML = "<option value=''>Scanning...</option>";
+    els.sessionList.innerHTML = "";
     
     try {
-        const sessions = await invoke("get_replay_sessions", { path: dir });
-        currentSessions = sessions;
+        const charLogs = await invoke("get_logs_by_character", { path: dir });
+        characters = charLogs;
         
-        els.sessionSelect.innerHTML = "<option value=''>Select a Session...</option>";
+        const sortedChars = Object.keys(charLogs).sort();
         
-        sessions.forEach((sess, idx) => {
-            // SystemTime from Rust via serde: { secs_since_epoch: ..., nanos_since_epoch: ... }
-            const secs = sess.timestamp.secs_since_epoch;
-            const date = new Date(secs * 1000);
+        if (sortedChars.length === 0) {
+            els.sessionList.innerHTML = "<div style='color:#aaa; padding:8px'>No logs found in this directory.</div>";
+        }
+
+        sortedChars.forEach(char => {
+            const logs = charLogs[char];
+            const charDiv = document.createElement("div");
+            charDiv.style.marginBottom = "12px";
+            charDiv.style.background = "rgba(255,255,255,0.02)";
+            charDiv.style.padding = "6px";
+            charDiv.style.borderRadius = "4px";
+            charDiv.innerHTML = `<div style="font-weight:bold; color:var(--accent-out); margin-bottom:6px; font-size:12px">${char}</div>`;
             
-            const label = `${date.toLocaleString()} (${sess.logs.length} chars)`;
-            const opt = document.createElement("option");
-            opt.value = idx;
-            opt.textContent = label;
-            els.sessionSelect.appendChild(opt);
+            const logsDiv = document.createElement("div");
+            logsDiv.style.paddingLeft = "8px";
+            
+            const visibleCount = 10;
+            const initialLogs = logs.slice(0, visibleCount);
+            initialLogs.forEach(log => logsDiv.appendChild(renderLogRow(log)));
+            
+            if (logs.length > visibleCount) {
+                const moreBtn = document.createElement("button");
+                moreBtn.className = "icon-btn";
+                moreBtn.style.marginTop = "4px";
+                moreBtn.style.fontSize = "9px";
+                moreBtn.textContent = `Show ${logs.length - visibleCount} more...`;
+                moreBtn.onclick = () => {
+                    logs.slice(visibleCount).forEach(log => logsDiv.appendChild(renderLogRow(log)));
+                    moreBtn.remove();
+                };
+                logsDiv.appendChild(moreBtn);
+            }
+            
+            charDiv.appendChild(logsDiv);
+            els.sessionList.appendChild(charDiv);
         });
         
         els.sessionPath.textContent = dir;
     } catch (e) {
         console.error(e);
         els.sessionPath.textContent = "Error scanning: " + e;
-        els.sessionSelect.innerHTML = "<option value=''>Error</option>";
     }
   }
 
@@ -64,56 +114,28 @@ try {
     try {
         const settings = await invoke("get_settings");
         currentLogDir = settings.gamelog_dir;
-        await refreshSessions(currentLogDir);
+        await refreshLogs(currentLogDir);
     } catch (e) { console.error(e); }
 
     // 2. Event Listeners
+    els.toggleLogsBtn.onclick = () => {
+        els.sessionPanel.classList.toggle("hidden");
+    };
+
     els.browseBtn.onclick = async () => {
         try {
             const path = await invoke("pick_gamelog_dir");
             if (path) {
                 currentLogDir = path;
-                await refreshSessions(currentLogDir);
+                await refreshLogs(currentLogDir);
             }
         } catch (e) { console.error(e); }
     };
     
-    els.sessionSelect.onchange = () => {
-        const idx = els.sessionSelect.value;
-        els.sessionDetails.innerHTML = "";
-        
-        if (idx === "") return;
-        
-        const session = currentSessions[idx];
-        if (!session) return;
-
-        session.logs.forEach(log => {
-            const div = document.createElement("div");
-            div.style.display = "flex";
-            div.style.alignItems = "center";
-            div.style.marginBottom = "2px";
-            
-            const cb = document.createElement("input");
-            cb.type = "checkbox";
-            cb.checked = true; 
-            cb.style.marginRight = "6px";
-            
-            log.enabled = true;
-            cb.onchange = () => log.enabled = cb.checked;
-            
-            const span = document.createElement("span");
-            span.textContent = log.character;
-            
-            div.appendChild(cb);
-            div.appendChild(span);
-            els.sessionDetails.appendChild(div);
-        });
-    };
-
     els.playPauseBtn.onclick = async () => {
         isPlaying = !isPlaying;
         els.playPauseBtn.textContent = isPlaying ? "Pause" : "Play";
-        // invoke("replay_toggle", { state: isPlaying })
+        // TODO: Start replay with selected logs
     };
     
     els.speedSelect.onchange = async () => {
