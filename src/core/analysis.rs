@@ -56,6 +56,7 @@ pub fn compute_dps_series(
             incoming_by_character: HashMap::<String, f32>::new(),
             outgoing_by_char_weapon: HashMap::<String, HashMap<WeaponName, f32>>::new(),
             outgoing_by_char_target: HashMap::<String, HashMap<EntityName, f32>>::new(),
+            combat_actions_by_character: HashMap::<String, Vec<super::model::CombatAction>>::new(),
         });
     }
 
@@ -81,6 +82,8 @@ pub fn compute_dps_series(
     let mut outgoing_by_char_weapon_damage: HashMap<String, HashMap<WeaponName, f32>> =
         HashMap::new();
     let mut outgoing_by_char_target_damage: HashMap<String, HashMap<EntityName, f32>> =
+        HashMap::new();
+    let mut outgoing_by_char_actions_map: HashMap<String, HashMap<(String, EventType), f32>> =
         HashMap::new();
 
     for (i, sample) in samples.iter_mut().enumerate() {
@@ -109,6 +112,12 @@ pub fn compute_dps_series(
                 }
             } else {
                 // Outgoing logic
+                *outgoing_by_char_actions_map
+                    .entry(event.character.clone())
+                    .or_default()
+                    .entry((event.weapon.clone(), event.event_type.clone()))
+                    .or_insert(0.0) += event.amount;
+
                 match event.event_type {
                     EventType::Damage => {
                         outgoing_sum += event.amount;
@@ -173,6 +182,19 @@ pub fn compute_dps_series(
                     EventType::Neut => incoming_neut_sum -= event.amount,
                 }
             } else {
+                if let Some(char_actions) = outgoing_by_char_actions_map.get_mut(&event.character) {
+                    let key = (event.weapon.clone(), event.event_type.clone());
+                    if let Some(val) = char_actions.get_mut(&key) {
+                        *val -= event.amount;
+                        if *val <= 0.0 {
+                            char_actions.remove(&key);
+                        }
+                    }
+                    if char_actions.is_empty() {
+                        outgoing_by_char_actions_map.remove(&event.character);
+                    }
+                }
+
                 match event.event_type {
                     EventType::Damage => {
                         outgoing_sum -= event.amount;
@@ -282,6 +304,23 @@ pub fn compute_dps_series(
                     targets
                         .iter()
                         .map(|(target, damage)| (target.clone(), damage / window_seconds))
+                        .collect(),
+                )
+            })
+            .collect();
+
+        sample.combat_actions_by_character = outgoing_by_char_actions_map
+            .iter()
+            .map(|(character, actions)| {
+                (
+                    character.clone(),
+                    actions
+                        .iter()
+                        .map(|((name, action_type), value)| super::model::CombatAction {
+                            name: name.clone(),
+                            action_type: action_type.clone(),
+                            value: value / window_seconds,
+                        })
                         .collect(),
                 )
             })
@@ -411,5 +450,59 @@ mod tests {
 
         assert_eq!(sample.outgoing_dps, 100.0);
         assert_eq!(sample.outgoing_hps, 50.0);
+    }
+
+    #[test]
+    fn aggregates_unified_combat_actions() {
+        let events = vec![
+            CombatEvent {
+                timestamp: Duration::from_secs(1),
+                source: "Pilot".to_string(),
+                target: "Enemy".to_string(),
+                weapon: "Laser".to_string(),
+                amount: 100.0,
+                incoming: false,
+                character: "Pilot".to_string(),
+                event_type: EventType::Damage,
+            },
+            CombatEvent {
+                timestamp: Duration::from_secs(1),
+                source: "Pilot".to_string(),
+                target: "Friend".to_string(),
+                weapon: "Rep".to_string(),
+                amount: 50.0,
+                incoming: false,
+                character: "Pilot".to_string(),
+                event_type: EventType::Repair,
+            },
+            CombatEvent {
+                timestamp: Duration::from_secs(1),
+                source: "Pilot".to_string(),
+                target: "Enemy".to_string(),
+                weapon: "Neut".to_string(),
+                amount: 20.0,
+                incoming: false,
+                character: "Pilot".to_string(),
+                event_type: EventType::Neut,
+            },
+        ];
+
+        let samples = compute_dps_series(&events, Duration::from_secs(1), Duration::from_secs(1));
+        let sample = &samples[1];
+
+        let actions = sample.combat_actions_by_character.get("Pilot").unwrap();
+        assert_eq!(actions.len(), 3);
+
+        let laser = actions.iter().find(|a| a.name == "Laser").unwrap();
+        assert_eq!(laser.action_type, EventType::Damage);
+        assert_eq!(laser.value, 100.0);
+
+        let rep = actions.iter().find(|a| a.name == "Rep").unwrap();
+        assert_eq!(rep.action_type, EventType::Repair);
+        assert_eq!(rep.value, 50.0);
+
+        let neut = actions.iter().find(|a| a.name == "Neut").unwrap();
+        assert_eq!(neut.action_type, EventType::Neut);
+        assert_eq!(neut.value, 20.0);
     }
 }

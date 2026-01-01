@@ -13,6 +13,6 @@ An always-on-top Tauri overlay window that reads EVE Online gamelogs and display
 - **Seamless Multiboxing Support:** Automatically detect and manage log files from multiple EVE Online clients, allowing players to track performance across all their active characters simultaneously.
 
 ## Key Features
-- **Robust Log Parsing:** High-accuracy parsing of EVE Online combat logs, capturing damage dealt, damage received, and related combat events.
-- **Interactive Combat Analytics:** Rich visualization of combat data, including real-time DPS metrics, per-character weapon breakdowns, and target analysis, all presented with a modern glassmorphism aesthetic.
+- **Robust Log Parsing:** High-accuracy parsing of EVE Online combat logs, capturing damage, remote repairs (Logistics), capacitor transfers, and energy neutralization events.
+- **Interactive Combat Analytics:** Rich visualization of combat data, including real-time DPS/HPS metrics, per-character weapon breakdowns, and target analysis, all presented with a modern glassmorphism aesthetic.
 - **Automated Character Management:** Smart detection of new log files and automatic mapping of logs to specific characters from a user-configurable directory, minimizing manual setup for the user.

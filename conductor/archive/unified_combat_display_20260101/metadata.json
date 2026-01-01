@@ -1,0 +1,8 @@
+{
+  "track_id": "unified_combat_display_20260101",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-01-01T00:00:00Z",
+  "updated_at": "2026-01-01T00:00:00Z",
+  "description": "we need to do a review on how we are parsing and displaying information. right now only weapons seem to show up at the bottom on a per character basis (where it shows character name above their weapons and top targets). everything should behave like that so maybe it should be a trait, or something and attached to everything. rep/cap/neut should all show up down there too under the character name and show the item/weapon used too"
+}

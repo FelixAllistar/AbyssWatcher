@@ -1,0 +1,8 @@
+------------------------------------------------------------
+  Gamelog
+  Listener: DemoPilot2
+  Session Started: 2025.01.01 12:00:00
+------------------------------------------------------------
+[ 2025.01.01 12:01:00 ] (combat) 500 to Testing Target - Heavy Missile - Hits
+[ 2025.01.01 12:01:05 ] (combat) 120 remote shield repaired to Friendly Logistic - Small Remote Shield Transmitter II
+[ 2025.01.01 12:01:10 ] (combat) 450 to Testing Target - Heavy Missile - Penetrates

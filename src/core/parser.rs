@@ -260,7 +260,10 @@ fn split_entities_and_weapon(
                 EventType::Damage => vec!["to ", "against "],
                 EventType::Repair => vec![
                     "remote armor repaired to ", "remote shield repaired to ", "remote hull repaired to ",
-                    "remote armor boosted to ", "remote shield boosted to ", "remote hull boosted to "
+                    "remote armor boosted to ", "remote shield boosted to ", "remote hull boosted to ",
+                    "armor repaired to ", "shield repaired to ", "hull repaired to ",
+                    "armor boosted to ", "shield boosted to ", "hull boosted to ",
+                    "repaired to ", "boosted to "
                 ],
                 EventType::Capacitor => vec!["remote capacitor transmitted to "],
                 EventType::Neut => vec!["energy neutralized ", "energy drained from ", "energy drained to "],
@@ -286,7 +289,10 @@ fn split_entities_and_weapon(
                 EventType::Damage => vec!["from "],
                 EventType::Repair => vec![
                     "remote armor repaired by ", "remote shield repaired by ", "remote hull repaired by ",
-                    "remote armor boosted by ", "remote shield boosted by ", "remote hull boosted by "
+                    "remote armor boosted by ", "remote shield boosted by ", "remote hull boosted by ",
+                    "armor repaired by ", "shield repaired by ", "hull repaired by ",
+                    "armor boosted by ", "shield boosted by ", "hull boosted by ",
+                    "repaired by ", "boosted by "
                 ],
                 EventType::Capacitor => vec!["remote capacitor transmitted by "],
                 EventType::Neut => vec!["energy neutralized by ", "energy drained by "],
@@ -352,7 +358,7 @@ mod tests {
         let _ = parser.parse_line("Session Started: 2025.11.15 07:09:22", "LogiPilot");
 
         // "120 remote shield boosted to Friendly Logistic - Small Remote Shield Transmitter II"
-        let line = "[ 2025.01.01 12:01:05 ] (combat) 120 remote shield boosted to Friendly Logistic - Small Remote Shield Transmitter II";
+        let line = "[ 2025.11.15 07:15:05 ] (combat) 120 remote shield boosted to Friendly Logistic - Small Remote Shield Transmitter II";
         
         let event = parser.parse_line(line, "LogiPilot").expect("should parse boosted");
 
@@ -372,7 +378,7 @@ mod tests {
 
         assert_eq!(event.amount, 41.0);
         assert_eq!(event.event_type, EventType::Capacitor);
-        assert_eq!(event.target, "Skybreaker [CARII] [I CherryPick Gneiss] -"); // Regex cleanup of tags is imperfect but this confirms logic
+        assert_eq!(event.target, "Skybreaker [CARII] [I CherryPick Gneiss]"); // Regex cleanup of tags is imperfect but this confirms logic
         assert!(!event.incoming);
     }
 

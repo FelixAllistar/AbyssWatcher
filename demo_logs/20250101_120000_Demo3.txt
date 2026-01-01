@@ -1,0 +1,10 @@
+------------------------------------------------------------
+  Gamelog
+  Listener: DemoPilot3
+  Session Started: 2025.01.01 12:00:00
+------------------------------------------------------------
+[ 2025.01.01 12:01:00 ] (combat) 500 to Testing Target - Heavy Missile - Hits
+[ 2025.01.01 12:01:05 ] (combat) 120 remote shield repaired to Friendly Logistic - Small Remote Shield Transmitter II
+[ 2025.01.01 12:01:10 ] (combat) 450 to Testing Target - Heavy Missile - Penetrates
+[ 2025.01.01 12:01:05 ] (combat) 120 remote shield repaired from Friendly Logistic - Small Remote Shield Transmitter II
+[ 2025.10.20 23:03:13 ] (combat) <color=0xffe57f7f><b>-6 GJ</b><color=0x77ffffff><font size=10> energy drained to </font><b><color=0xffffffff><font size=12><color=0xFFFFB300> <u><b>Proteus</b></u></color></font> [<b>ASS-A</b>]  [Crimzone Zaxouhi]<color=0xFFFFFFFF><b> -</b><color=0x77ffffff><font size=10> - Small Knave Scoped Energy Nosferatu</font>

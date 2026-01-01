@@ -5,12 +5,19 @@ use std::time::Duration;
 pub type EntityName = String;
 pub type WeaponName = String;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum EventType {
     Damage,
     Repair,
     Capacitor,
     Neut,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CombatAction {
+    pub name: String,
+    pub value: f32,
+    pub action_type: EventType,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,8 +63,12 @@ pub struct DpsSample {
     pub incoming_by_character: HashMap<String, f32>,
     
     // Per-character detailed maps
+    // DEPRECATED: Use combat_actions_by_character instead for unified display
     pub outgoing_by_char_weapon: HashMap<String, HashMap<WeaponName, f32>>,
     pub outgoing_by_char_target: HashMap<String, HashMap<EntityName, f32>>,
+
+    // Unified list of actions (Weapons, Reps, Cap) per character
+    pub combat_actions_by_character: HashMap<String, Vec<CombatAction>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

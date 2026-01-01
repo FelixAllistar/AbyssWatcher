@@ -6,32 +6,21 @@
   <title>AbyssWatcher</title>
   <style>
     :root {
-      --bg-color: rgba(15, 15, 20, 0.7);
+      --bg-color: rgba(15, 15, 20, 0.85);
       --accent-out: #00d2ff;
       --accent-in: #ff5e5e;
       --text-main: #ffffff;
       --text-dim: #94a3b8;
       --border-color: rgba(255, 255, 255, 0.1);
-      --font-stack: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      --font-stack: 'Inter', sans-serif;
     }
-
-    * { box-sizing: border-box; }
 
     body {
       margin: 0;
-      padding: 0;
       background-color: transparent;
       color: var(--text-main);
       font-family: var(--font-stack);
       overflow: hidden;
-      user-select: none;
-      animation: force-repaint 1s infinite;
-    }
-
-    @keyframes force-repaint {
-      0% { opacity: 1; }
-      50% { opacity: 0.99; }
-      100% { opacity: 1; }
     }
 
     #app {
@@ -41,265 +30,64 @@
       width: 100vw;
       background-color: var(--bg-color);
       backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
       padding: 10px;
       border: 1px solid var(--border-color);
-      box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
-      
-      transform: translateZ(0);
-      will-change: transform;
     }
 
-    /* Header */
-    #header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 6px;
-      flex-shrink: 0;
-    }
-
-    .header-controls {
-      display: flex;
-      gap: 6px;
-    }
-
-    h1 {
-      margin: 0;
-      font-size: 10px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 2px;
-      color: var(--text-dim);
-      opacity: 0.8;
-    }
-
-    button.icon-btn {
-      cursor: pointer;
-      font-size: 10px;
-      font-weight: 600;
+    #header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    h1 { margin: 0; font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: var(--text-dim); }
+    
+    .icon-btn {
       background: rgba(255, 255, 255, 0.05);
       border: 1px solid var(--border-color);
       color: var(--text-dim);
       padding: 2px 8px;
+      font-size: 10px;
       border-radius: 4px;
-      transition: all 0.2s ease;
+      cursor: pointer;
     }
+    .icon-btn:hover { background: rgba(255, 255, 255, 0.1); color: var(--text-main); }
 
-    button.icon-btn:hover {
-      background: rgba(255, 255, 255, 0.1);
-      color: var(--text-main);
-    }
+    .dps-summary { display: flex; gap: 8px; justify-content: space-around; margin-top: 10px; }
+    .dps-box { text-align: center; flex: 1; background: rgba(0,0,0,0.3); padding: 4px; border-radius: 4px; }
+    .label-header { font-size: 9px; font-weight: 800; color: var(--text-dim); display: block; }
+    .sub-values { display: flex; justify-content: center; gap: 6px; }
+    .value { font-size: 18px; font-weight: 800; }
+    .out { color: var(--accent-out); }
+    .in { color: var(--accent-in); }
+    .sub-label { font-size: 7px; opacity: 0.5; display: block; }
+
+    #active-list { margin-top: 10px; flex-grow: 1; overflow-y: auto; font-size: 11px; }
+    
+    .hidden { display: none !important; }
 
     /* Settings Modal */
     #settings-modal {
       position: absolute;
-      top: 30px;
-      left: 10px;
-      right: 10px;
+      top: 30px; left: 10px; right: 10px;
       background: rgba(15, 15, 20, 0.95);
       border: 1px solid var(--border-color);
-      border-radius: 6px;
-      padding: 10px;
+      border-radius: 6px; padding: 10px;
       z-index: 100;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.8);
       backdrop-filter: blur(10px);
     }
-    
-    #settings-modal h2 {
-      margin: 0 0 10px 0;
-      font-size: 12px;
-      color: var(--accent-out);
-      text-transform: uppercase;
-    }
+    .form-group { margin-bottom: 10px; }
+    .form-group label { display: block; font-size: 10px; color: var(--text-dim); margin-bottom: 4px; }
+    .form-row { display: flex; gap: 6px; }
+    input { background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: var(--text-main); padding: 4px; font-size: 11px; border-radius: 3px; }
+    input[type="text"] { flex-grow: 1; }
+    input[type="number"] { width: 60px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+    .primary-btn { background: var(--accent-out); color: #000; font-weight: 700; border: none; }
 
-    .form-group {
-      margin-bottom: 10px;
-    }
-
-    .form-group label {
-      display: block;
-      font-size: 10px;
-      color: var(--text-dim);
-      margin-bottom: 4px;
-    }
-
-    .form-row {
-      display: flex;
-      gap: 6px;
-    }
-
-    input[type="text"], input[type="number"] {
-      background: rgba(0,0,0,0.3);
-      border: 1px solid var(--border-color);
-      color: var(--text-main);
-      padding: 4px;
-      font-size: 11px;
-      border-radius: 3px;
-      flex-grow: 1;
-    }
-    
-    input[type="number"] { width: 60px; flex-grow: 0; }
-
-    .modal-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-      margin-top: 10px;
-    }
-    
-    .primary-btn {
-      background: var(--accent-out);
-      color: #000;
-      border: none;
-      font-weight: 700;
-    }
-    .primary-btn:hover { background: #33dbff; }
-
-    /* Selection List */
+    /* Selection */
     #selection-container {
-      background: rgba(0, 0, 0, 0.4);
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      margin-bottom: 10px;
-      max-height: 120px;
-      overflow-y: auto;
-      font-size: 11px;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      opacity: 1;
+      background: rgba(0,0,0,0.4); border: 1px solid var(--border-color);
+      border-radius: 6px; margin-bottom: 10px; max-height: 120px; overflow-y: auto;
+      font-size: 11px; padding: 4px;
     }
-    
-    #selection-container.hidden { 
-      max-height: 0;
-      opacity: 0;
-      margin-bottom: 0;
-      border-color: transparent;
-      pointer-events: none;
-      display: block !important; /* Override the previous hidden style */
-    }
-    #settings-modal.hidden { display: none; }
-
-    .char-row {
-      display: flex;
-      align-items: center;
-      padding: 6px 10px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-      transition: background 0.2s ease;
-    }
-    .char-row:last-child { border-bottom: none; }
-    .char-row:hover { background: rgba(255, 255, 255, 0.05); }
-    .char-row input { margin-right: 10px; cursor: pointer; }
-
-    /* Main Data Section */
-    #data-container {
-      flex-grow: 1;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      min-height: 0;
-    }
-
-    .dps-summary {
-      display: flex;
-      gap: 12px;
-      justify-content: space-around;
-      align-items: baseline;
-      flex-wrap: nowrap;
-    }
-
-    .dps-box {
-      text-align: center;
-      flex: 1;
-    }
-
-    .label {
-      font-size: 9px;
-      font-weight: 700;
-      color: var(--text-dim);
-      display: block;
-      margin-bottom: -2px;
-      letter-spacing: 1px;
-    }
-
-    .value {
-      font-size: clamp(20px, 8vw, 40px);
-      font-weight: 800;
-      display: block;
-      line-height: 1;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .out { 
-      color: var(--accent-out); 
-      text-shadow: 0 0 15px rgba(0, 210, 255, 0.4); 
-    }
-    .in { 
-      color: var(--accent-in); 
-      text-shadow: 0 0 15px rgba(255, 94, 94, 0.4); 
-    }
-    .rep {
-      color: #a3e635; /* Lime green for repairs */
-      text-shadow: 0 0 15px rgba(163, 230, 53, 0.4);
-    }
-    .cap {
-      color: #facc15; /* Yellow for capacitor */
-      text-shadow: 0 0 15px rgba(250, 204, 21, 0.4);
-    }
-    .neut {
-      color: #c084fc; /* Purple for neuts */
-      text-shadow: 0 0 15px rgba(192, 132, 252, 0.4);
-    }
-
-    /* Per-Character List */
-    .active-list {
-      margin-top: 10px;
-      font-size: 11px;
-      border-top: 1px solid var(--border-color);
-      padding-top: 6px;
-    }
-
-    .active-char {
-      display: flex;
-      justify-content: space-between;
-      padding: 3px 6px;
-      border-radius: 4px;
-    }
-    .active-char span { 
-      color: var(--text-main); 
-      font-weight: 700;
-      text-shadow: 0 0 10px rgba(255,255,255,0.1);
-    }
-    .active-char strong { color: var(--accent-out); font-weight: 800; }
-
-    /* Detail Breakdowns */
-    .char-section {
-      margin-bottom: 8px;
-      border-bottom: 1px solid rgba(255,255,255,0.02);
-      padding-bottom: 4px;
-    }
-    .char-section:last-child { border-bottom: none; }
-
-    .breakdown-list {
-      padding: 0 8px 0 16px;
-      margin-top: 2px;
-    }
-    .breakdown-item {
-      display: flex;
-      justify-content: space-between;
-      font-size: 9px;
-      color: var(--text-dim);
-      line-height: 1.4;
-      opacity: 0.7;
-    }
-    .breakdown-item span:last-child {
-      font-variant-numeric: tabular-nums;
-      font-weight: 600;
-    }
-    .targets {
-      margin-top: 4px;
-      border-top: 1px inset rgba(255,255,255,0.03);
-      padding-top: 2px;
-    }
+    .char-row { display: flex; align-items: center; padding: 4px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+    .char-row input { margin-right: 8px; }
   </style>
 </head>
 <body>
@@ -314,7 +102,6 @@
 
     <!-- Settings Modal -->
     <div id="settings-modal" class="hidden">
-      <h2>Configuration</h2>
       <div class="form-group">
         <label>Game Logs Directory</label>
         <div class="form-row">
@@ -327,7 +114,7 @@
         <input type="number" id="dps-window-input" min="1" max="60" />
       </div>
       <div class="modal-actions">
-        <button id="replay-btn" class="icon-btn" style="margin-right: auto; color: #ffeb3b;">↺ Replay</button>
+        <button id="replay-btn" class="icon-btn" style="color: #ffeb3b;">↺ Replay</button>
         <button id="cancel-settings" class="icon-btn">Cancel</button>
         <button id="save-settings" class="icon-btn primary-btn">Save</button>
       </div>
@@ -338,29 +125,36 @@
     <div id="data-container">
       <div class="dps-summary">
         <div class="dps-box">
-          <span class="label">OUT</span>
-          <span id="out-dps" class="value out">0.0</span>
+          <span class="label-header">DPS</span>
+          <div class="sub-values">
+            <div class="sub-val"><span class="sub-label">OUT</span><span id="out-dps" class="value out">0.0</span></div>
+            <div class="sub-val"><span class="sub-label">IN</span><span id="in-dps" class="value in">0.0</span></div>
+          </div>
         </div>
         <div class="dps-box">
-          <span class="label">REP</span>
-          <span id="out-hps" class="value rep">0.0</span>
+          <span class="label-header">REP</span>
+          <div class="sub-values">
+            <div class="sub-val"><span class="sub-label">OUT</span><span id="out-hps" class="value out" style="color:#a3e635">0.0</span></div>
+            <div class="sub-val"><span class="sub-label">IN</span><span id="in-hps" class="value in" style="color:#4ade80">0.0</span></div>
+          </div>
         </div>
         <div class="dps-box">
-          <span class="label">CAP</span>
-          <span id="out-cap" class="value cap">0.0</span>
+          <span class="label-header">CAP</span>
+          <div class="sub-values">
+            <div class="sub-val"><span class="sub-label">OUT</span><span id="out-cap" class="value out" style="color:#facc15">0.0</span></div>
+            <div class="sub-val"><span class="sub-label">IN</span><span id="in-cap" class="value in" style="color:#fbbf24">0.0</span></div>
+          </div>
         </div>
         <div class="dps-box">
-          <span class="label">NEUT</span>
-          <span id="out-neut" class="value neut">0.0</span>
-        </div>
-        <div class="dps-box">
-          <span class="label">IN</span>
-          <span id="in-dps" class="value in">0.0</span>
+          <span class="label-header">NEUT</span>
+          <div class="sub-values">
+            <div class="sub-val"><span class="sub-label">OUT</span><span id="out-neut" class="value out" style="color:#c084fc">0.0</span></div>
+            <div class="sub-val"><span class="sub-label">IN</span><span id="in-neut" class="value in" style="color:#a855f7">0.0</span></div>
+          </div>
         </div>
       </div>
-      <div id="active-list" class="active-list"></div>
+      <div id="active-list"></div>
     </div>
-
   </div>
   <script src="main.js"></script>
 </body>
