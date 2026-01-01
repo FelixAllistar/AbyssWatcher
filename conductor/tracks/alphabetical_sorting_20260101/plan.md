@@ -10,7 +10,7 @@ Analyze and update the frontend code to sort characters alphabetically.
 - [x] Task: Verify Sorting 15edeff
   - Use the Replay feature with a log containing multiple characters to confirm alphabetical order.
 
-## Phase 2: Verification
+## Phase 2: Verification [checkpoint: 8156a9f]
 Final check to ensure the sorting works as expected.
 
 - [x] Task: Conductor - User Manual Verification 'Verification' 15edeff
