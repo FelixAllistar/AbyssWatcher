@@ -222,7 +222,7 @@
     }
 
     .value {
-      font-size: clamp(24px, 10vw, 48px);
+      font-size: clamp(20px, 8vw, 40px);
       font-weight: 800;
       display: block;
       line-height: 1;
@@ -236,6 +236,10 @@
     .in { 
       color: var(--accent-in); 
       text-shadow: 0 0 15px rgba(255, 94, 94, 0.4); 
+    }
+    .rep {
+      color: #a3e635; /* Lime green for repairs */
+      text-shadow: 0 0 15px rgba(163, 230, 53, 0.4);
     }
 
     /* Per-Character List */
@@ -369,6 +373,10 @@
         <div class="dps-box">
           <span class="label">OUT</span>
           <span id="out-dps" class="value out">0.0</span>
+        </div>
+        <div class="dps-box">
+          <span class="label">REP</span>
+          <span id="out-hps" class="value rep">0.0</span>
         </div>
         <div class="dps-box">
           <span class="label">IN</span>
