@@ -8,10 +8,10 @@
 - [ ] Task: Conductor - User Manual Verification 'Infrastructure & Componentization' (Protocol in workflow.md) [checkpoint: adf52fe]
 
 ## Phase 2: Log Discovery & Session Grouping
-- [ ] Task: Implement `core::log_io::discover_sessions` to scan a directory and extract character names from log headers.
-- [ ] Task: Implement grouping logic to cluster logs by timestamp (e.g., logs starting within 10 minutes of each other).
-- [ ] Task: Expose session discovery via a Tauri command `get_replay_sessions`.
-- [ ] Task: Build the "Session Picker" UI in the Replay window (List of runs -> List of character logs).
+- [x] Task: Implement `core::log_io::discover_sessions` to scan a directory and extract character names from log headers. b150f2f
+- [x] Task: Implement grouping logic to cluster logs by timestamp (e.g., logs starting within 10 minutes of each other). b150f2f
+- [x] Task: Expose session discovery via a Tauri command `get_replay_sessions`. b150f2f
+- [x] Task: Build the "Session Picker" UI in the Replay window (List of runs -> List of character logs). b150f2f
 - [ ] Task: Conductor - User Manual Verification 'Log Discovery & Session Grouping' (Protocol in workflow.md)
 
 ## Phase 3: Synchronized Playback Engine
