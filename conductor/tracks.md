@@ -10,7 +10,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [ ] Track: Fix Character Totals and Persistence
+## [x] Track: Fix Character Totals and Persistence
 
 *Link: [./conductor/tracks/fix_character_totals_and_persistence_20260101/](./conductor/tracks/fix_character_totals_and_persistence_20260101/)*
 
