@@ -6,7 +6,7 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## [x] Track: Alphabetical Sorting of Character Totals
 
-*Link: [./conductor/tracks/alphabetical_sorting_20260101/](./conductor/tracks/alphabetical_sorting_20260101/)*
+*Link: [./conductor/archive/alphabetical_sorting_20260101/](./conductor/archive/alphabetical_sorting_20260101/)*
 
 ---
 
