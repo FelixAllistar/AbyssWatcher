@@ -253,7 +253,88 @@
     /* Per-Character List */
     .active-list {
       margin-top: 10px;
-// ...
+      font-size: 11px;
+      border-top: 1px solid var(--border-color);
+      padding-top: 6px;
+    }
+
+    .active-char {
+      display: flex;
+      justify-content: space-between;
+      padding: 3px 6px;
+      border-radius: 4px;
+    }
+    .active-char span { 
+      color: var(--text-main); 
+      font-weight: 700;
+      text-shadow: 0 0 10px rgba(255,255,255,0.1);
+    }
+    .active-char strong { color: var(--accent-out); font-weight: 800; }
+
+    /* Detail Breakdowns */
+    .char-section {
+      margin-bottom: 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.02);
+      padding-bottom: 4px;
+    }
+    .char-section:last-child { border-bottom: none; }
+
+    .breakdown-list {
+      padding: 0 8px 0 16px;
+      margin-top: 2px;
+    }
+    .breakdown-item {
+      display: flex;
+      justify-content: space-between;
+      font-size: 9px;
+      color: var(--text-dim);
+      line-height: 1.4;
+      opacity: 0.7;
+    }
+    .breakdown-item span:last-child {
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+    .targets {
+      margin-top: 4px;
+      border-top: 1px inset rgba(255,255,255,0.03);
+      padding-top: 2px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="header">
+      <h1>Watcher</h1>
+      <div class="header-controls">
+        <button id="toggle-settings" class="icon-btn">Chars</button>
+        <button id="toggle-config" class="icon-btn">⚙</button>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="hidden">
+      <h2>Configuration</h2>
+      <div class="form-group">
+        <label>Game Logs Directory</label>
+        <div class="form-row">
+            <input type="text" id="log-dir-input" readonly />
+            <button id="browse-btn" class="icon-btn">...</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>DPS Window (Seconds)</label>
+        <input type="number" id="dps-window-input" min="1" max="60" />
+      </div>
+      <div class="modal-actions">
+        <button id="replay-btn" class="icon-btn" style="margin-right: auto; color: #ffeb3b;">↺ Replay</button>
+        <button id="cancel-settings" class="icon-btn">Cancel</button>
+        <button id="save-settings" class="icon-btn primary-btn">Save</button>
+      </div>
+    </div>
+
+    <div id="selection-container" class="hidden"></div>
+
     <div id="data-container">
       <div class="dps-summary">
         <div class="dps-box">
