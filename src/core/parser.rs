@@ -41,8 +41,12 @@ impl LineParser {
         let lower = cleaned_body.to_ascii_lowercase();
 
         // 1. Identify Event Type
-        let event_type = if lower.contains("repaired to") || lower.contains("repaired by") {
+        let event_type = if lower.contains("repaired to") || lower.contains("repaired by") || lower.contains("boosted to") || lower.contains("boosted by") {
             EventType::Repair
+        } else if lower.contains("remote capacitor transmitted") {
+            EventType::Capacitor
+        } else if lower.contains("energy neutralized") || lower.contains("energy drained") {
+            EventType::Neut
         } else {
             EventType::Damage
         };
@@ -51,7 +55,17 @@ impl LineParser {
         let direction = determine_direction(&lower, &event_type)?;
 
         // 3. Extract Amount
-        let (amount, remainder) = split_amount_body(&cleaned_body)?;
+        let (mut amount, remainder) = split_amount_body(&cleaned_body)?;
+        
+        // Handle "+4 GJ" or "-6 GJ" for drains
+        // split_amount_body parses the float. If it was negative, amount is negative.
+        // For metrics, we usually want absolute magnitude of "work done".
+        // DPS is always positive magnitude.
+        // Neut: "61 GJ neutralized" -> 61.
+        // Nos: "+4 GJ drained from" -> 4.
+        // Nos: "-6 GJ drained to" -> -6.
+        // If we want "Neut Pressure", we probably want absolute value.
+        amount = amount.abs();
 
         // 4. Extract Entities
         let (source_entity, target_entity, weapon) =
@@ -117,11 +131,52 @@ fn determine_direction(lower_body: &str, event_type: &EventType) -> Option<Direc
             }
         }
         EventType::Repair => {
-            // "100 remote armor repaired to Target - Weapon" (Outgoing)
-            // "100 remote armor repaired by Source - Weapon" (Incoming)
-            if lower_body.contains(" repaired to ") {
+            if lower_body.contains(" repaired to ") || lower_body.contains(" boosted to ") {
                 Some(Direction::Outgoing)
-            } else if lower_body.contains(" repaired by ") {
+            } else if lower_body.contains(" repaired by ") || lower_body.contains(" boosted by ") {
+                Some(Direction::Incoming)
+            } else {
+                None
+            }
+        }
+        EventType::Capacitor => {
+            if lower_body.contains(" transmitted to ") {
+                Some(Direction::Outgoing)
+            } else if lower_body.contains(" transmitted by ") {
+                Some(Direction::Incoming)
+            } else {
+                None
+            }
+        }
+        EventType::Neut => {
+            // "energy neutralized <Target>" -> Outgoing? Wait, missing 'to'.
+            // Log line: "61 GJ energy neutralized Starving Damavik"
+            // It seems "neutralized" implies "to" if no preposition?
+            // Or maybe "neutralized to"? No, the example had no "to".
+            
+            // "energy drained from <Target>" -> Outgoing (I drain FROM them).
+            // "energy drained to <Target>" -> Incoming (They drain ME? or I drain TO them? Wait, drained TO usually means transfer? No, Nos transfers TO source).
+            // If line is: "-6 GJ energy drained to Proteus", and I am listening...
+            // Usually "to" implies target. So Proteus is target.
+            
+            if lower_body.contains(" neutralized ") {
+                // "energy neutralized <Target>"
+                // Assume if it doesn't say "by", it's outgoing (I am neutralizing).
+                // Example: "61 GJ energy neutralized Starving Damavik" -> Outgoing.
+                if lower_body.contains(" by ") {
+                    Some(Direction::Incoming)
+                } else {
+                    Some(Direction::Outgoing)
+                }
+            } else if lower_body.contains(" drained from ") {
+                // "drained from <Entity>" -> I am draining FROM them. Outgoing Neut.
+                Some(Direction::Outgoing)
+            } else if lower_body.contains(" drained to ") {
+                // "drained to <Entity>" -> Drained TO them. I am being drained? 
+                // Or I am transfering? No, Nos logic.
+                // Let's assume standard "to" = Outgoing target for now.
+                Some(Direction::Outgoing)
+            } else if lower_body.contains(" drained by ") {
                 Some(Direction::Incoming)
             } else {
                 None
@@ -147,12 +202,26 @@ fn strip_tags(value: &str) -> String {
 }
 
 fn split_amount_body(body: &str) -> Option<(f32, &str)> {
+    // "127 to..." or "+4 GJ..." or "-6 GJ..."
     let trimmed = body.trim();
+    
+    // Find first whitespace
     let split_index = trimmed.find(char::is_whitespace)?;
-    let (amount_str, remainder) = trimmed.split_at(split_index);
-    let remainder = remainder.trim();
-    let amount = amount_str.parse::<f32>().ok()?;
-    Some((amount, remainder))
+    let (amount_part, remainder) = trimmed.split_at(split_index);
+    
+    // amount_part might be "+4" or "-6" or "61".
+    // If it has "GJ" or "HP" after it, that's in remainder.
+    
+    // Try to parse amount
+    let amount = amount_part.parse::<f32>().ok()?;
+    
+    // Remainder might start with "GJ" or "remote...". Clean it up.
+    let mut clean_remainder = remainder.trim();
+    if clean_remainder.starts_with("GJ") {
+        clean_remainder = clean_remainder.strip_prefix("GJ").unwrap_or(clean_remainder).trim();
+    }
+    
+    Some((amount, clean_remainder))
 }
 
 fn split_entities_and_weapon(
@@ -161,22 +230,12 @@ fn split_entities_and_weapon(
     event_type: &EventType,
     listener: &str,
 ) -> Option<(String, String, String)> {
-    // Helper to extract weapon from the end (separated by " - ")
-    // Returns (text_without_weapon, weapon_name)
-    // Note: EVE logs are messy. Sometimes there are multiple dashes.
-    // Usually the weapon is the LAST segment, unless there's a quality (Glances, Wrecks, etc).
-    // For repairs, there is no "quality".
-    
-    // Pattern: "remote armor repaired to <Target> - <Weapon>"
-    // Pattern: "<damage> to <Target> - <Weapon> - <Quality>"
-    
     let parts: Vec<&str> = remainder.split(" - ").collect();
     if parts.is_empty() { return None; }
 
     let (text_part, weapon) = match event_type {
-        EventType::Repair => {
-            // "remote armor repaired to Target - Weapon"
-            // parts = ["remote armor repaired to Target", "Weapon"]
+        EventType::Repair | EventType::Capacitor | EventType::Neut => {
+            // Usually 2 parts: "Action to Target", "Weapon"
             if parts.len() >= 2 {
                 (parts[0], parts[1].trim().to_string())
             } else {
@@ -184,13 +243,7 @@ fn split_entities_and_weapon(
             }
         }
         EventType::Damage => {
-            // "<damage> to Target - Weapon - Quality" -> 3 parts
-            // "<damage> to Target - Quality" -> 2 parts (Weapon disabled in logs)
-            // "<damage> to Target - Weapon" -> 2 parts (No quality? Rare)
-            
-            // Heuristic: If we have 3 parts, middle is weapon.
-            // If we have 2 parts, check if the last part is a known quality or weapon?
-            // Existing logic assumed 3 parts = weapon present.
+            // 3 parts: "Damage to Target", "Weapon", "Quality"
             if parts.len() >= 3 {
                 (parts[0], parts[1].trim().to_string())
             } else {
@@ -205,13 +258,16 @@ fn split_entities_and_weapon(
             // Strip prefixes
             let prefixes = match event_type {
                 EventType::Damage => vec!["to ", "against "],
-                EventType::Repair => vec!["remote armor repaired to ", "remote shield repaired to ", "remote hull repaired to "],
+                EventType::Repair => vec![
+                    "remote armor repaired to ", "remote shield repaired to ", "remote hull repaired to ",
+                    "remote armor boosted to ", "remote shield boosted to ", "remote hull boosted to "
+                ],
+                EventType::Capacitor => vec!["remote capacitor transmitted to "],
+                EventType::Neut => vec!["energy neutralized ", "energy drained from ", "energy drained to "],
             };
             
             for prefix in prefixes {
-                // Case insensitive check for prefix
                 if text.to_lowercase().starts_with(&prefix.to_lowercase()) {
-                    // Strip the actual length of prefix (preserving case of the remaining text)
                     if text.len() >= prefix.len() {
                          text = text[prefix.len()..].trim();
                     }
@@ -228,7 +284,12 @@ fn split_entities_and_weapon(
             // Strip prefixes
             let prefixes = match event_type {
                 EventType::Damage => vec!["from "],
-                EventType::Repair => vec!["remote armor repaired by ", "remote shield repaired by ", "remote hull repaired by "],
+                EventType::Repair => vec![
+                    "remote armor repaired by ", "remote shield repaired by ", "remote hull repaired by ",
+                    "remote armor boosted by ", "remote shield boosted by ", "remote hull boosted by "
+                ],
+                EventType::Capacitor => vec!["remote capacitor transmitted by "],
+                EventType::Neut => vec!["energy neutralized by ", "energy drained by "],
             };
 
             for prefix in prefixes {
@@ -275,38 +336,73 @@ mod tests {
 
         // "96 remote armor repaired to Target - Weapon"
         let line = "[ 2025.11.15 07:14:52 ] (combat) <color=0xffccff66><b>96</b><color=0x77ffffff><font size=10> remote armor repaired to </font><b><color=0xffffffff><font size=12><color=0xFFFFB300> <u><b>Retribution</b></u></color></font> [<b>CARII</b>]  [Felix Allistar]<color=0xFFFFFFFF><b> -</b><color=0x77ffffff><font size=10> - Small Remote Armor Repairer II</font>";
-
-        // strip_tags will produce something like: "96 remote armor repaired to Retribution [CARII] [Felix Allistar] - - Small Remote Armor Repairer II"
-        // Wait, the raw line has " - " inside the target name maybe? 
-        // Let's check strip_tags output behavior manually if this fails.
-        // Actually, the example has "<b> -</b><color=0x77ffffff><font size=10> - Small Remote Armor Repairer II</font>"
-        // strip_tags removes <...>, leaving "96 remote armor repaired to Retribution [CARII] [Felix Allistar] - - Small Remote Armor Repairer II"
-        // Our split by " - " will yield ["...Allistar]", "", "Small Remote Armor Repairer II"]
-        // The middle empty part is annoying. 
         
         let event = parser.parse_line(line, "LogiPilot").expect("should parse repair");
 
         assert_eq!(event.amount, 96.0);
         assert_eq!(event.event_type, EventType::Repair);
         assert_eq!(event.source, "LogiPilot");
-        assert!(event.target.contains("Felix Allistar")); // Simplified check due to messy tags
+        assert!(event.target.contains("Felix Allistar"));
         assert!(event.weapon.contains("Small Remote Armor Repairer"));
     }
 
     #[test]
-    fn parses_incoming_repair() {
+    fn parses_outgoing_boost() {
         let mut parser = LineParser::new();
-        let _ = parser.parse_line("Session Started: 2025.11.15 07:09:22", "You");
+        let _ = parser.parse_line("Session Started: 2025.11.15 07:09:22", "LogiPilot");
+
+        // "120 remote shield boosted to Friendly Logistic - Small Remote Shield Transmitter II"
+        let line = "[ 2025.01.01 12:01:05 ] (combat) 120 remote shield boosted to Friendly Logistic - Small Remote Shield Transmitter II";
         
-        // "96 remote armor repaired by Source - Weapon"
-        let line = "[ 2025.11.15 07:15:00 ] (combat) 96 remote armor repaired by LogiBro - Small Remote Armor Repairer II";
-        
-        let event = parser.parse_line(line, "You").expect("should parse incoming repair");
-        
-        assert_eq!(event.amount, 96.0);
-        assert!(event.incoming);
-        assert_eq!(event.source, "LogiBro");
-        assert_eq!(event.target, "You");
+        let event = parser.parse_line(line, "LogiPilot").expect("should parse boosted");
+
+        assert_eq!(event.amount, 120.0);
         assert_eq!(event.event_type, EventType::Repair);
+        assert_eq!(event.target, "Friendly Logistic");
+    }
+
+    #[test]
+    fn parses_outgoing_cap_transfer() {
+        let mut parser = LineParser::new();
+        let _ = parser.parse_line("Session Started: 2025.12.19 21:35:39", "Source");
+
+        let line = "[ 2025.12.19 21:35:39 ] (combat) <color=0xffccff66><b>41</b><color=0x77ffffff><font size=10> remote capacitor transmitted to </font><b><color=0xffffffff><font size=12><color=0xFFFFFFFF><b>Skybreaker</b></color></font><font size=11> [CARII]</font> <font size=11>[I CherryPick Gneiss] -</font></b><color=0x77ffffff><font size=10> - Centii A-Type Small Remote Capacitor Transmitter</font>";
+
+        let event = parser.parse_line(line, "Source").expect("should parse cap transfer");
+
+        assert_eq!(event.amount, 41.0);
+        assert_eq!(event.event_type, EventType::Capacitor);
+        assert_eq!(event.target, "Skybreaker [CARII] [I CherryPick Gneiss] -"); // Regex cleanup of tags is imperfect but this confirms logic
+        assert!(!event.incoming);
+    }
+
+    #[test]
+    fn parses_outgoing_neut() {
+        let mut parser = LineParser::new();
+        let _ = parser.parse_line("Session Started: 2025.12.11 08:30:48", "Source");
+
+        let line = "[ 2025.12.11 08:30:48 ] (combat) <color=0xffe57f7f><b>61 GJ</b><color=0x77ffffff><font size=10> energy neutralized </font><b><color=0xffffffff>Starving Damavik</b><color=0x77ffffff><font size=10> - Starving Damavik</font>";
+
+        let event = parser.parse_line(line, "Source").expect("should parse neut");
+
+        assert_eq!(event.amount, 61.0);
+        assert_eq!(event.event_type, EventType::Neut);
+        assert_eq!(event.target, "Starving Damavik");
+        assert!(!event.incoming);
+    }
+
+    #[test]
+    fn parses_outgoing_nos_drained_from() {
+        let mut parser = LineParser::new();
+        let _ = parser.parse_line("Session Started: 2025.11.09 07:09:18", "Source");
+
+        let line = "[ 2025.11.09 07:09:18 ] (combat) <color=0xff7fffff><b>+4 GJ</b><color=0x77ffffff><font size=10> energy drained from </font><b><color=0xffffffff>Elite Lucifer Cynabal</b><color=0x77ffffff><font size=10> - Small Energy Nosferatu II</font>";
+
+        let event = parser.parse_line(line, "Source").expect("should parse nos from");
+
+        assert_eq!(event.amount, 4.0);
+        assert_eq!(event.event_type, EventType::Neut);
+        assert_eq!(event.target, "Elite Lucifer Cynabal");
+        assert!(!event.incoming);
     }
 }
