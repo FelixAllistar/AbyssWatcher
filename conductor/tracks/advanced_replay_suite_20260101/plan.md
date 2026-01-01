@@ -2,9 +2,9 @@
 
 ## Phase 1: Infrastructure & Componentization
 - [x] Task: Refactor `ui/main.js` and `ui/index.html` to separate visual components (DPS bars, tables) from application-specific logic. 8459239
-- [ ] Task: Create `ui/replay.html` and `ui/replay.js` as the entry point for the new window.
-- [ ] Task: Implement a Tauri command `open_replay_window` that spawns the secondary window.
-- [ ] Task: Ensure the Replay window can fetch the current `gamelog_dir` from the backend settings.
+- [x] Task: Create `ui/replay.html` and `ui/replay.js` as the entry point for the new window. cfdd8a1
+- [x] Task: Implement a Tauri command `open_replay_window` that spawns the secondary window. cfdd8a1
+- [x] Task: Ensure the Replay window can fetch the current `gamelog_dir` from the backend settings. cfdd8a1
 - [ ] Task: Conductor - User Manual Verification 'Infrastructure & Componentization' (Protocol in workflow.md)
 
 ## Phase 2: Log Discovery & Session Grouping
