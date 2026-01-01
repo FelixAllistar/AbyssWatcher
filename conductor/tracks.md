@@ -4,5 +4,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [~] Track: Configurable Settings & File Browser
-*Link: [./conductor/tracks/configurable_settings_20251231/](./conductor/tracks/configurable_settings_20251231/)*
+## [~] Track: Detailed Combat Metrics
+*Link: [./conductor/tracks/detailed_metrics_20251231/](./conductor/tracks/detailed_metrics_20251231/)*
