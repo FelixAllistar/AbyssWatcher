@@ -239,32 +239,52 @@ fn split_entities_and_weapon(
     event_type: &EventType,
     listener: &str,
 ) -> Option<(String, String, String)> {
-    let parts: Vec<&str> = remainder.split(" - ").collect();
-    if parts.is_empty() { return None; }
+    // Quality suffixes for damage
+    let qualities = ["hits", "misses", "grazes", "glances", "scratches", "penetrates", "smashes", "wrecks"];
 
-    let (text_part, weapon) = match event_type {
-        EventType::Repair | EventType::Capacitor | EventType::Neut => {
-            // Usually 2 parts: "Action to Target", "Weapon"
-            if parts.len() >= 2 {
-                (parts[0], parts[1].trim().to_string())
+    let mut parts: Vec<&str> = remainder.split(" - ").map(|s| s.trim()).collect();
+    // Filter out empty parts caused by " - - "
+    parts.retain(|s| !s.is_empty());
+
+    let (mut text_part, mut weapon) = match event_type {
+        EventType::Damage => {
+            if parts.is_empty() {
+                ("", "".to_string())
+            } else if parts.len() >= 3 {
+                // [Text, Weapon, Quality]
+                (parts[0], parts[1].trim_start_matches('-').trim().to_string())
+            } else if parts.len() == 2 {
+                // Could be [Text, Weapon] or [Text, Quality]
+                let last = parts[1].to_lowercase();
+                if qualities.iter().any(|&q| last.contains(q)) {
+                    // It's a quality, weapon is empty
+                    (parts[0], "".to_string())
+                } else {
+                    // It's a weapon
+                    (parts[0], parts[1].trim_start_matches('-').trim().to_string())
+                }
             } else {
                 (parts[0], "".to_string())
             }
         }
-        EventType::Damage => {
-            // 3 parts: "Damage to Target", "Weapon", "Quality"
-            if parts.len() >= 3 {
-                (parts[0], parts[1].trim().to_string())
-            } else {
+        _ => {
+            // Repair, Cap, Neut: [Text, Weapon] or [Text]
+            if parts.len() >= 2 {
+                // Tag-stripped logs often have " - - Weapon". 
+                (parts[0], parts.last().unwrap_or(&"").trim_start_matches('-').trim().to_string())
+            } else if !parts.is_empty() {
                 (parts[0], "".to_string())
+            } else {
+                ("", "".to_string())
             }
         }
     };
 
+    let mut entity_name = "";
+
     match direction {
         Direction::Outgoing => {
             let mut text = text_part.trim();
-            // Strip prefixes
             let prefixes = match event_type {
                 EventType::Damage => vec!["to ", "against "],
                 EventType::Repair => vec![
@@ -280,20 +300,14 @@ fn split_entities_and_weapon(
             
             for prefix in prefixes {
                 if text.to_lowercase().starts_with(&prefix.to_lowercase()) {
-                    if text.len() >= prefix.len() {
-                         text = text[prefix.len()..].trim();
-                    }
+                    text = text[prefix.len()..].trim();
                     break;
                 }
             }
-            
-            let target = text.trim_end_matches(" -").trim().to_string();
-            if target.is_empty() { return None; }
-            Some((listener.to_string(), target, weapon))
+            entity_name = text;
         }
         Direction::Incoming => {
             let mut text = text_part.trim();
-            // Strip prefixes
             let prefixes = match event_type {
                 EventType::Damage => vec!["from "],
                 EventType::Repair => vec![
@@ -309,17 +323,26 @@ fn split_entities_and_weapon(
 
             for prefix in prefixes {
                 if text.to_lowercase().starts_with(&prefix.to_lowercase()) {
-                    if text.len() >= prefix.len() {
-                         text = text[prefix.len()..].trim();
-                    }
+                    text = text[prefix.len()..].trim();
                     break;
                 }
             }
-
-            let source = text.trim_end_matches(" -").trim().to_string();
-            if source.is_empty() { return None; }
-            Some((source, listener.to_string(), weapon))
+            entity_name = text;
         }
+    }
+
+    let entity = entity_name.trim_end_matches(" -").trim().to_string();
+    if entity.is_empty() { return None; }
+
+    // If weapon is empty, use Source (Incoming) or Target (Outgoing Neut/Rep) if appropriate? 
+    // Actually, for incoming damage, we definitely want the Source name if no weapon exists.
+    if weapon.is_empty() {
+         weapon = entity.clone();
+    }
+
+    match direction {
+        Direction::Outgoing => Some((listener.to_string(), entity, weapon)),
+        Direction::Incoming => Some((entity, listener.to_string(), weapon)),
     }
 }
 
@@ -419,5 +442,33 @@ mod tests {
         assert_eq!(event.event_type, EventType::Neut);
         assert_eq!(event.target, "Elite Lucifer Cynabal");
         assert!(!event.incoming);
+    }
+    #[test]
+    fn parses_incoming_damage_no_weapon() {
+        let mut parser = LineParser::new();
+        let _ = parser.parse_line("Session Started: 2026.01.02 10:23:31", "Felix");
+        
+        // Log line: 26 from Lucifer Echo - Hits
+        let line = "[ 2026.01.02 10:23:35 ] (combat) <color=0xffcc0000><b>26</b> <color=0x77ffffff><font size=10>from</font> <b><color=0xffffffff>Lucifer Echo</b><font size=10><color=0x77ffffff> - Hits";
+        let event = parser.parse_line(line, "Felix").expect("should parse");
+        
+        assert_eq!(event.amount, 26.0);
+        assert!(event.incoming);
+        assert_eq!(event.source, "Lucifer Echo");
+        assert_eq!(event.weapon, "Lucifer Echo"); // Fallback to source
+    }
+
+    #[test]
+    fn parses_double_dash_repair() {
+        let mut parser = LineParser::new();
+        let _ = parser.parse_line("Session Started: 2026.01.02 10:23:31", "Felix");
+        
+        // Log line: 160 remote shield boosted to Hawk [CARII] [Felix Allistar] - - Pithi C-Type Small Remote Shield Booster
+        let line = "[ 2026.01.02 10:23:31 ] (combat) <color=0xffccff66><b>160</b><color=0x77ffffff><font size=10> remote shield boosted to </font><b><color=0xffffffff><font size=12><color=0xFFFFFFFF><b>Hawk</b></color></font><font size=11> [CARII]</font> <font size=11>[Felix Allistar] -</font></b><color=0x77ffffff><font size=10> - Pithi C-Type Small Remote Shield Booster</font>";
+        let event = parser.parse_line(line, "Felix").expect("should parse double dash");
+        
+        assert_eq!(event.amount, 160.0);
+        assert!(event.weapon.contains("Pithi C-Type"));
+        assert!(event.target.contains("Felix Allistar"));
     }
 }
