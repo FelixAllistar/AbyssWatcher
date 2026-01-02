@@ -250,19 +250,27 @@ struct CharacterUIState {
 }
 
 #[tauri::command]
-fn get_available_characters(state: State<'_, AppState>) -> Vec<CharacterUIState> {
-    let settings = state.settings.lock().unwrap();
-    let logs = log_io::scan_gamelogs_dir(&settings.gamelog_dir).unwrap_or_default();
+async fn get_available_characters(state: State<'_, AppState>) -> Result<Vec<CharacterUIState>, String> {
+    let gamelog_dir = {
+        let settings = state.settings.lock().unwrap();
+        settings.gamelog_dir.clone()
+    };
+    
+    // Run blocking file I/O on a separate thread
+    let logs = tauri::async_runtime::spawn_blocking(move || {
+        log_io::scan_gamelogs_dir(&gamelog_dir).unwrap_or_default()
+    }).await.map_err(|e| e.to_string())?;
+    
     let tracked = state.tracked_paths.lock().unwrap();
 
-    logs.into_iter().map(|log| {
+    Ok(logs.into_iter().map(|log| {
         let is_tracked = tracked.contains(&log.path);
         CharacterUIState {
             character: log.character,
             path: log.path,
             tracked: is_tracked,
         }
-    }).collect()
+    }).collect())
 }
 
 #[tauri::command]
@@ -280,6 +288,16 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             let handle = app.handle().clone();
+            
+            // KDE Always-On-Top "Double-Tap" Fix
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_always_on_top(true);
+                let w_clone = window.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    let _ = w_clone.set_always_on_top(true);
+                });
+            }
             
             // Initialize Config
             let config_dir = app.path().app_config_dir().unwrap_or(PathBuf::from("."));

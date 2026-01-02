@@ -60,3 +60,14 @@ Follow these guidelines from `conductor/product-guidelines.md`:
 - **Reliability**:
   - Prefer owned `String` in Core for safety.
   - Handle all IO errors gracefully (e.g., file permission issues on logs).
+## Linux-Specific Fixes
+
+Due to Linux compositor behaviors (especially KDE/Plasma), specific workarounds are maintained:
+
+### 1. Transparency Ghosting Fix
+- **Problem**: OS compositors sometimes fail to clear the buffer of transparent windows, leaving "ghost" artifacts when UI elements move or hide.
+- **Fix**: The `#app` container in `ui/index.html` uses a "jitter" animation (`linux-repaint-jitter`) that oscillates padding by 0.01px every 0.1s. This forces the compositor to redraw every frame without using layer promotion (like `transform: translateZ(0)`), which can interfere with window transparency on some Linux drivers.
+
+### 2. Always-On-Top "Double-Tap"
+- **Problem**: Some Linux window managers (KDE) ignore the `alwaysOnTop` setting in `tauri.conf.json` during initial window creation.
+- **Fix**: Implemented in `src/app.rs`. The application explicitly calls `set_always_on_top(true)` twice: once immediately on setup, and again after a 500ms delay to ensure the window manager respects the state once the window is fully mapped.
