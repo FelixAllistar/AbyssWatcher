@@ -66,7 +66,7 @@ Due to Linux compositor behaviors (especially KDE/Plasma), specific workarounds 
 
 ### 1. Transparency Ghosting Fix
 - **Problem**: OS compositors sometimes fail to clear the buffer of transparent windows, leaving "ghost" artifacts when UI elements move or hide.
-- **Fix**: The `body` in `ui/index.html` uses an `antiGhosting` animation that oscillates opacity between `1` and `0.999` every 2s. This forces a redraw without the side effects of layer promotion (which breaks transparency) or layout shifts.
+- **Fix**: A MutationObserver in `ui/main.js` watches for DOM changes (text updates, class toggles, element additions). When a change is detected, it calls the `refresh_transparency` Rust command (in `src/app.rs`) which performs an imperceptible 1px window height resize, forcing the compositor to clear its buffer. The 50ms debounce prevents performance issues during rapid updates.
 
 ### 2. Always-On-Top "Double-Tap"
 - **Problem**: Some Linux window managers (KDE) ignore the `alwaysOnTop` setting in `tauri.conf.json` during initial window creation.
