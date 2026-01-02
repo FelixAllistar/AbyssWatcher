@@ -15,6 +15,15 @@ impl EngineState {
             sorted: true,
         }
     }
+}
+
+impl Default for EngineState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EngineState {
 
     pub fn push_event(&mut self, event: CombatEvent) {
         self.events.push(event);

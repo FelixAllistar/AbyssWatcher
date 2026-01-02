@@ -14,6 +14,7 @@ try {
     const ghostingObserver = new MutationObserver(() => triggerRefresh());
     ghostingObserver.observe(document.body, {
         attributes: true,
+        attributeFilter: ['class'], // Only watch class changes (hidden toggle), not layout attributes
         childList: true,
         subtree: true,
         characterData: true

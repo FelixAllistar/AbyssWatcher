@@ -217,13 +217,13 @@ mod tests {
         ]).unwrap();
 
         let e1 = stream.next_event().unwrap();
-        assert_eq!(e1.source, "CharA");
+        assert_eq!(e1.0.source, "CharA");
         
         let e2 = stream.next_event().unwrap();
-        assert_eq!(e2.source, "CharB");
+        assert_eq!(e2.0.source, "CharB");
         
         let e3 = stream.next_event().unwrap();
-        assert_eq!(e3.source, "CharA");
+        assert_eq!(e3.0.source, "CharA");
         
         assert!(stream.next_event().is_none());
     }
@@ -240,11 +240,11 @@ mod tests {
         
         ctrl.set_state(PlaybackState::Playing);
         let events = ctrl.tick();
-        assert_eq!(events.len(), 1);
+        assert_eq!(events.0.len(), 1);
         
         ctrl.set_speed(10.0);
         std::thread::sleep(Duration::from_millis(150)); 
         let events = ctrl.tick();
-        assert_eq!(events.len(), 1);
+        assert_eq!(events.0.len(), 1);
     }
 }

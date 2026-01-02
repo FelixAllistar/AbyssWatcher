@@ -24,5 +24,8 @@ tauri-plugin-dialog = "2.4.2"
 name = "abyss_watcher"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[dev-dependencies]
+tempfile = "3"
+
 [features]
 default = []

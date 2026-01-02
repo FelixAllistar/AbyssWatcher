@@ -14,6 +14,15 @@ impl LogWatcher {
             trackers: HashMap::new(),
         }
     }
+}
+
+impl Default for LogWatcher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LogWatcher {
 
     /// Updates the set of tracked paths.
     /// Returns a list of status messages (e.g., "Started tracking...").

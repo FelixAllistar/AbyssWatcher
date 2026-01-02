@@ -19,6 +19,15 @@ impl LineParser {
     pub fn new() -> Self {
         Self { base_time: None }
     }
+}
+
+impl Default for LineParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LineParser {
 
     pub fn parse_line(&mut self, line: &str, source: &str) -> Option<CombatEvent> {
         let trimmed = line.trim();

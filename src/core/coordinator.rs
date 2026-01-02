@@ -60,10 +60,10 @@ impl Coordinator {
         if !new_events.is_empty() {
             let now_wallclock = SystemTime::now();
             for event in new_events {
-                self.last_event_timestamp = Some(match self.last_event_timestamp {
-                    Some(prev) => std::cmp::max(prev, event.timestamp),
-                    None => event.timestamp,
-                });
+                self.last_event_timestamp = Some(
+                    self.last_event_timestamp
+                        .map_or(event.timestamp, |prev| prev.max(event.timestamp))
+                );
                 self.engine.push_event(event);
             }
             self.last_event_wallclock = Some(now_wallclock);

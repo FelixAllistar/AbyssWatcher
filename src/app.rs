@@ -1,7 +1,7 @@
 use std::collections::{HashSet, HashMap};
 use std::path::PathBuf;
 use std::sync::{Mutex, Arc, RwLock};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicBool, Ordering};
 use std::time::Duration;
 use tauri::{Emitter, Manager, State, WebviewWindowBuilder, WebviewUrl};
 use tauri_plugin_dialog::DialogExt;
@@ -9,6 +9,10 @@ use tokio::sync::mpsc;
 use crate::core::{log_io, coordinator, config::{ConfigManager, Settings}, replay_engine, state::EngineState};
 
 static REPLAY_SESSION_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+lazy_static::lazy_static! {
+    static ref REFRESHING: AtomicBool = AtomicBool::new(false);
+}
 
 enum LoopCommand {
     Replay,
@@ -49,12 +53,9 @@ async fn open_replay_window(app: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 async fn get_logs_by_character(path: Option<PathBuf>, state: State<'_, AppState>) -> Result<HashMap<String, Vec<log_io::CharacterLog>>, String> {
-    let target_dir = if let Some(p) = path {
-        p
-    } else {
-        let settings = state.settings.lock().unwrap();
-        settings.gamelog_dir.clone()
-    };
+    let target_dir = path.unwrap_or_else(|| {
+        state.settings.lock().unwrap().gamelog_dir.clone()
+    });
 
     println!("Scanning logs in {:?}", target_dir);
     let logs = log_io::scan_all_logs(&target_dir).map_err(|e| e.to_string())?;
@@ -286,13 +287,24 @@ fn toggle_tracking(path: PathBuf, state: State<'_, AppState>) {
 /// Forces the Linux compositor to clear the transparency buffer by doing a micro-resize.
 #[tauri::command]
 fn refresh_transparency(window: tauri::Window) {
-    std::thread::spawn(move || {
-        if let Ok(size) = window.inner_size() {
-            let _ = window.set_size(tauri::PhysicalSize::new(size.width, size.height.saturating_sub(1)));
-            std::thread::sleep(std::time::Duration::from_millis(2));
-            let _ = window.set_size(tauri::PhysicalSize::new(size.width, size.height));
-        }
-    });
+    if REFRESHING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+
+    // Get the EXACT current physical size and re-apply it
+    // This triggers a compositor refresh without changing dimensions
+    if let Ok(size) = window.inner_size() {
+        let w_clone = window.clone();
+        std::thread::spawn(move || {
+            // Shrink by 1 physical pixel, then restore to exact original
+            let _ = w_clone.set_size(tauri::PhysicalSize::new(size.width, size.height.saturating_sub(1)));
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            let _ = w_clone.set_size(size); // Restore EXACT original PhysicalSize
+            REFRESHING.store(false, Ordering::SeqCst);
+        });
+    } else {
+        REFRESHING.store(false, Ordering::SeqCst);
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

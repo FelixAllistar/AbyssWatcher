@@ -16,9 +16,14 @@ AbyssWatcher is a high-performance DPS Meter for EVE Online, built as a modern d
   - `src/core/`: Application domain logic, strictly separated from the UI.
     - `model.rs`: Combat events, DPS samples, fight summaries.
     - `parser.rs`: Regex-based log line parsing (`(combat)` lines).
-    - `log_io.rs`: Efficient log tailing and historical scanning using `tokio`.
+    - `log_io.rs`: Efficient log tailing and historical scanning.
     - `analysis.rs`: DPS computation and time-series aggregation.
     - `state.rs`: The `EngineState` that holds combat history.
+    - `config.rs`: Settings management and persistence (JSON-based).
+    - `coordinator.rs`: Orchestrates log watching and DPS computation loop.
+    - `watcher.rs`: Manages multiple `TrackedGamelog` instances.
+    - `tracker.rs`: Wraps a single log file with tailer + parser.
+    - `replay_engine.rs`: Log replay with merged streams and speed control.
 - **Frontend (Web)**:
   - Located in `ui/`.
   - Built with HTML5, CSS3, and JavaScript (Vanilla or Framework-light).
@@ -66,8 +71,13 @@ Due to Linux compositor behaviors (especially KDE/Plasma), specific workarounds 
 
 ### 1. Transparency Ghosting Fix
 - **Problem**: OS compositors sometimes fail to clear the buffer of transparent windows, leaving "ghost" artifacts when UI elements move or hide.
-- **Fix**: A MutationObserver in `ui/main.js` watches for DOM changes (text updates, class toggles, element additions). When a change is detected, it calls the `refresh_transparency` Rust command (in `src/app.rs`) which performs an imperceptible 1px window height resize, forcing the compositor to clear its buffer. The 50ms debounce prevents performance issues during rapid updates.
+- **Fix**: A MutationObserver in `ui/main.js` watches for DOM content changes (childList and characterData). When a change is detected, it calls the `refresh_transparency` Rust command (in `src/app.rs`) which performs an imperceptible 0.1 logical pixel window height resize, forcing the compositor to clear its buffer. A thread-safe atomic lock and 50ms debounce prevent performance issues and visual flashing during rapid updates.
 
 ### 2. Always-On-Top "Double-Tap"
 - **Problem**: Some Linux window managers (KDE) ignore the `alwaysOnTop` setting in `tauri.conf.json` during initial window creation.
 - **Fix**: Implemented in `src/app.rs`. The application explicitly calls `set_always_on_top(true)` twice: once immediately on setup, and again after a 500ms delay to ensure the window manager respects the state once the window is fully mapped.
+### 3. Wayland Transparency Resize Fix
+- **Problem**: Native Wayland (via WebKitGTK) exhibits resizing synchronization artifacts with transparent windows, causing severe flickering or size instability (e.g., "size crawl").
+- **Fix**: Force the application to use XWayland (X11 compatibility mode) by setting `GDK_BACKEND=x11`. This is enforced in:
+  - `abyss-watcher.desktop`: `Exec=env GDK_BACKEND=x11 ...`
+  - Dev environment: `.cargo/config.toml` sets `[env] GDK_BACKEND = "x11"`
