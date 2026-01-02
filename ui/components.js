@@ -1,34 +1,42 @@
 // ui/components.js
 
 const Components = {
-  Styles: {
-    damage: { color: "#ff6b6b", label: "DPS" },
-    repair: { color: "#6bff6b", label: "HPS" },
-    cap: { color: "#6b6bff", label: "GJ/s" },
-    neut: { color: "#d26bff", label: "GJ/s" }, // Purpleish
-    default: { color: "#aaa", label: "" }
+  // Map EventType + Incoming to CSS class and suffix
+  getMetricStyle: function (type, incoming) {
+    switch (type) {
+      case "Damage":
+        return { class: incoming ? "text-dps-in" : "text-dps-out", label: "DPS" };
+      case "Repair":
+        return { class: incoming ? "text-rep-in" : "text-rep-out", label: "HPS" };
+      case "Capacitor":
+        return { class: incoming ? "text-cap-in" : "text-cap-out", label: "GJ/s" };
+      case "Neut":
+        return { class: incoming ? "text-neut-in" : "text-neut-out", label: "GJ/s" };
+      default:
+        return { class: "text-default", label: "" };
+    }
   },
 
-  renderSelection: function(container, characters, onToggle) {
+  renderSelection: function (container, characters, onToggle) {
     container.innerHTML = "";
     if (characters.length === 0) {
-        container.innerHTML = "<div style='padding:4px; color:#aaa'>No logs found.</div>";
-        return;
+      container.innerHTML = "<div class='text-dim' style='padding:4px;'>No logs found.</div>";
+      return;
     }
     characters.forEach(char => {
-        const div = document.createElement("div");
-        div.className = "char-row";
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.checked = char.tracked;
-        checkbox.onchange = () => onToggle(char, checkbox.checked);
-        div.appendChild(checkbox);
-        div.appendChild(document.createTextNode(char.character));
-        container.appendChild(div);
+      const div = document.createElement("div");
+      div.className = "char-row";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = char.tracked;
+      checkbox.onchange = () => onToggle(char, checkbox.checked);
+      div.appendChild(checkbox);
+      div.appendChild(document.createTextNode(char.character));
+      container.appendChild(div);
     });
   },
 
-  updateUI: function(els, data, characters) {
+  updateUI: function (els, data, characters) {
     if (els.outDps) els.outDps.textContent = data.outgoing_dps.toFixed(1);
     if (els.inDps) els.inDps.textContent = data.incoming_dps.toFixed(1);
     if (els.outHps) els.outHps.textContent = (data.outgoing_hps || 0).toFixed(1);
@@ -38,74 +46,89 @@ const Components = {
     if (els.outNeut) els.outNeut.textContent = (data.outgoing_neut || 0).toFixed(1);
     if (els.inNeut) els.inNeut.textContent = (data.incoming_neut || 0).toFixed(1);
 
-    if (!els.activeList) return;
+    if (els.combatBreakdown) {
+      this.renderBreakdown(els.combatBreakdown, data, characters);
+    }
+  },
 
-    // Active List Logic
+  renderBreakdown: function (container, data, characters) {
     let html = "";
-    
+
     // Convert data to Map for easy lookup
     const activeData = new Map(Object.entries(data.combat_actions_by_character || {}));
 
     // Merge tracked characters that are inactive
     characters.forEach(char => {
-        if (char.tracked && !activeData.has(char.character)) {
-            activeData.set(char.character, []);
-        }
+      if (char.tracked && !activeData.has(char.character)) {
+        activeData.set(char.character, []);
+      }
     });
 
     const chars = Array.from(activeData.entries());
-    
-    // Sort logic: Alphabetical by character name
     chars.sort((a, b) => a[0].localeCompare(b[0]));
 
     chars.forEach(([name, actions]) => {
-        // Calculate totals by type
-        let dps = 0, hps = 0, cap = 0, neut = 0;
-        actions.forEach(act => {
-            if (act.action_type === "Damage") dps += act.value;
-            else if (act.action_type === "Repair") hps += act.value;
-            else if (act.action_type === "Capacitor") cap += act.value;
-            else if (act.action_type === "Neut") neut += act.value;
-        });
+      // Calculate totals by type and direction for badges
+      let stats = {
+        out: { dps: 0, hps: 0, cap: 0, neut: 0 },
+        in: { dps: 0, hps: 0, cap: 0, neut: 0 }
+      };
 
-        // Build Header with Badges
-        let headerBadges = "";
-        if (dps > 0 || (hps===0 && cap===0 && neut===0)) headerBadges += `<span style="color:${Components.Styles.damage.color}; margin-left:6px">${dps.toFixed(1)}</span>`;
-        if (hps > 0) headerBadges += `<span style="color:${Components.Styles.repair.color}; margin-left:6px">REP ${hps.toFixed(1)}</span>`;
-        if (cap > 0) headerBadges += `<span style="color:${Components.Styles.cap.color}; margin-left:6px">CAP ${cap.toFixed(1)}</span>`;
-        if (neut > 0) headerBadges += `<span style="color:${Components.Styles.neut.color}; margin-left:6px">NEUT ${neut.toFixed(1)}</span>`;
+      actions.forEach(act => {
+        let dir = act.incoming ? 'in' : 'out';
+        if (act.action_type === "Damage") stats[dir].dps += act.value;
+        else if (act.action_type === "Repair") stats[dir].hps += act.value;
+        else if (act.action_type === "Capacitor") stats[dir].cap += act.value;
+        else if (act.action_type === "Neut") stats[dir].neut += act.value;
+      });
 
-        html += `<div style="margin-bottom:6px; border-bottom:1px solid rgba(255,255,255,0.05)">
+      // Build Header with Badges
+      let headerBadges = "";
+
+      // Helper to add badge if value > 0
+      const addBadge = (val, type, dir) => {
+        if (val <= 0) return;
+        const style = this.getMetricStyle(type, dir === 'in');
+        const prefix = (type !== 'Damage') ? type + ' ' : '';
+        headerBadges += `<span class="${style.class}" style="margin-left:6px">${prefix}${val.toFixed(1)}</span>`;
+      };
+
+      addBadge(stats.out.dps, "Damage", "out");
+      addBadge(stats.in.dps, "Damage", "in");
+      addBadge(stats.out.hps, "Repair", "out");
+      addBadge(stats.in.hps, "Repair", "in");
+      addBadge(stats.out.cap, "Capacitor", "out");
+      addBadge(stats.in.cap, "Capacitor", "in");
+      addBadge(stats.out.neut, "Neut", "out");
+      addBadge(stats.in.neut, "Neut", "in");
+
+      // Fallback for idle tracked chars
+      if (headerBadges === "") headerBadges = `<span class="text-dps-out" style="margin-left:6px">0.0</span>`;
+
+      html += `<div style="margin-bottom:8px; border-bottom:1px solid var(--border-color-dim); padding-bottom:4px;">
           <div style="display:flex; justify-content:space-between; font-weight:700">
             <span>${name}</span>
             <div>${headerBadges}</div>
           </div>`;
-        
-        // Actions
-        // Sort actions by value descending
-        actions.sort((a, b) => b.value - a.value);
-        
-        actions.forEach(act => {
-            let style = Components.Styles.default;
 
-            if (act.action_type === "Damage") {
-                style = Components.Styles.damage;
-            } else if (act.action_type === "Repair") {
-                style = Components.Styles.repair;
-            } else if (act.action_type === "Capacitor") {
-                style = Components.Styles.cap;
-            } else if (act.action_type === "Neut") {
-                style = Components.Styles.neut;
-            }
+      // Sort actions: Outgoing first, then Incoming. Within each, by value desc.
+      actions.sort((a, b) => {
+        if (a.incoming !== b.incoming) return a.incoming ? 1 : -1;
+        return b.value - a.value;
+      });
 
-            html += `<div style="font-size:9px; color:${style.color}; display:flex; justify-content:space-between; align-items:center">
-              <span>${act.name}</span>
+      actions.forEach(act => {
+        const style = this.getMetricStyle(act.action_type, act.incoming);
+        const prefix = act.incoming ? "↙ " : "↗ ";
+
+        html += `<div class="${style.class}" style="font-size:9px; display:flex; justify-content:space-between; align-items:center; margin-left: 4px;">
+              <span>${prefix}${act.name}</span>
               <span>${act.value.toFixed(1)} <span style="font-size:7px; opacity:0.7">${style.label}</span></span>
             </div>`;
-        });
-        html += `</div>`;
+      });
+      html += `</div>`;
     });
-    
-    els.activeList.innerHTML = html;
+
+    container.innerHTML = html;
   }
 };

@@ -42,7 +42,7 @@ try {
         inCap: document.getElementById("in-cap"),
         outNeut: document.getElementById("out-neut"),
         inNeut: document.getElementById("in-neut"),
-        activeList: document.getElementById("active-list")
+        combatBreakdown: document.getElementById("combat-breakdown")
     };
 
     // State

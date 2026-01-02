@@ -83,7 +83,7 @@ pub fn compute_dps_series(
         HashMap::new();
     let mut outgoing_by_char_target_damage: HashMap<String, HashMap<EntityName, f32>> =
         HashMap::new();
-    let mut outgoing_by_char_actions_map: HashMap<String, HashMap<(String, EventType), f32>> =
+    let mut outgoing_by_char_actions_map: HashMap<String, HashMap<(String, EventType, bool), f32>> =
         HashMap::new();
 
     for (i, sample) in samples.iter_mut().enumerate() {
@@ -110,12 +110,17 @@ pub fn compute_dps_series(
                     EventType::Capacitor => incoming_cap_sum += event.amount,
                     EventType::Neut => incoming_neut_sum += event.amount,
                 }
+                *outgoing_by_char_actions_map
+                    .entry(event.character.clone())
+                    .or_default()
+                    .entry((event.weapon.clone(), event.event_type.clone(), true))
+                    .or_insert(0.0) += event.amount;
             } else {
                 // Outgoing logic
                 *outgoing_by_char_actions_map
                     .entry(event.character.clone())
                     .or_default()
-                    .entry((event.weapon.clone(), event.event_type.clone()))
+                    .entry((event.weapon.clone(), event.event_type.clone(), false))
                     .or_insert(0.0) += event.amount;
 
                 match event.event_type {
@@ -183,7 +188,7 @@ pub fn compute_dps_series(
                 }
             } else {
                 if let Some(char_actions) = outgoing_by_char_actions_map.get_mut(&event.character) {
-                    let key = (event.weapon.clone(), event.event_type.clone());
+                    let key = (event.weapon.clone(), event.event_type.clone(), event.incoming);
                     if let Some(val) = char_actions.get_mut(&key) {
                         *val -= event.amount;
                         if *val <= 0.0 {
@@ -316,10 +321,11 @@ pub fn compute_dps_series(
                     character.clone(),
                     actions
                         .iter()
-                        .map(|((name, action_type), value)| super::model::CombatAction {
+                        .map(|((name, action_type, incoming), value)| super::model::CombatAction {
                             name: name.clone(),
                             action_type: action_type.clone(),
                             value: value / window_seconds,
+                            incoming: *incoming,
                         })
                         .collect(),
                 )

@@ -1,0 +1,47 @@
+:root {
+  /* Core Colors */
+  --bg-color: rgba(15, 15, 20, 0.85);
+  --bg-color-solid: #0f0f14;
+  --bg-panel: rgba(0, 0, 0, 0.3);
+  --bg-panel-hover: rgba(0, 0, 0, 0.4);
+
+  --border-color: rgba(255, 255, 255, 0.1);
+  --border-color-dim: rgba(255, 255, 255, 0.05);
+
+  --text-main: #ffffff;
+  --text-dim: #94a3b8;
+  --text-muted: #64748b;
+
+  /* Font Stack */
+  --font-stack: 'Inter', sans-serif;
+
+  /* 
+     GLOBAL COLOR PALETTE
+     Standardized across summary cards and character breakdown.
+  */
+
+  /* DPS (Dealt = Blue, Received = Red) */
+  --color-dps-out: #00d2ff;
+  --color-dps-in: #ff5e5e;
+
+  /* REPAIR (Dealt = Lime, Received = Emerald) */
+  --color-rep-out: #a3e635;
+  --color-rep-in: #4ade80;
+
+  /* CAPACITOR (Dealt = Yellow, Received = Amber) */
+  --color-cap-out: #facc15;
+  --color-cap-in: #fbbf24;
+
+  /* NEUTER (Dealt = LightPurple, Received = DeepPurple) */
+  --color-neut-out: #c084fc;
+  --color-neut-in: #a855f7;
+
+  /* Default/Other */
+  --color-action-default: #aaaaaa;
+
+  /* Button Colors */
+  --btn-bg: rgba(255, 255, 255, 0.05);
+  --btn-bg-hover: rgba(255, 255, 255, 0.1);
+  --btn-bg-primary: var(--color-dps-out);
+  --btn-text-primary: #000000;
+}

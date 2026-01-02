@@ -27,7 +27,16 @@ AbyssWatcher is a high-performance DPS Meter for EVE Online, built as a modern d
 - **Frontend (Web)**:
   - Located in `ui/`.
   - Built with HTML5, CSS3, and JavaScript (Vanilla or Framework-light).
-  - communicating with Rust via Tauri Commands (`invoke`) and Events (`emit`).
+  - Communicates with Rust via Tauri Commands (`invoke`) and Events (`emit`).
+  - **Windows**:
+    - **Live Overlay** (`index.html`): The main transparent DPS tracking window.
+    - **Replay Suite** (`replay.html`): The log replay and analysis window.
+  - **Styling** (`ui/styles/`):
+    - `theme.css`: Single source of truth for all CSS variables (colors, fonts). Edit this for theming.
+    - `common.css`: Shared component styles (`.icon-btn`, `.dps-box`, `.value`, utility classes like `.text-dps-out`).
+    - `main.css`: Imports theme/common + Live Overlay-specific layout (settings modal, character selection).
+    - `replay.css`: Imports theme/common + Replay Suite-specific layout (timeline, controls).
+  - **Components** (`ui/components.js`): Shared JS for rendering character lists and DPS updates. Uses CSS classes (e.g., `.text-action-damage`) instead of hardcoded colors.
 
 ## Design & UX Principles
 

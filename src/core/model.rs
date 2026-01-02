@@ -18,6 +18,7 @@ pub struct CombatAction {
     pub name: String,
     pub value: f32,
     pub action_type: EventType,
+    pub incoming: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
