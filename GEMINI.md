@@ -66,7 +66,7 @@ Due to Linux compositor behaviors (especially KDE/Plasma), specific workarounds 
 
 ### 1. Transparency Ghosting Fix
 - **Problem**: OS compositors sometimes fail to clear the buffer of transparent windows, leaving "ghost" artifacts when UI elements move or hide.
-- **Fix**: The `#app` container in `ui/index.html` uses a "jitter" animation (`linux-repaint-jitter`) that oscillates padding by 0.01px every 0.1s. This forces the compositor to redraw every frame without using layer promotion (like `transform: translateZ(0)`), which can interfere with window transparency on some Linux drivers.
+- **Fix**: The `body` in `ui/index.html` uses an `antiGhosting` animation that oscillates opacity between `1` and `0.999` every 2s. This forces a redraw without the side effects of layer promotion (which breaks transparency) or layout shifts.
 
 ### 2. Always-On-Top "Double-Tap"
 - **Problem**: Some Linux window managers (KDE) ignore the `alwaysOnTop` setting in `tauri.conf.json` during initial window creation.

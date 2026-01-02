@@ -7,8 +7,8 @@
   <title>AbyssWatcher</title>
   <style>
     :root {
-      --bg-color: rgba(15, 15, 20, 0.5);
-      /* ... */
+      --bg-color: rgba(15, 15, 20, 0.85);
+      /* DPS Colors */
       --color-dps-out: #00d2ff;
       --color-dps-in: #ff5e5e;
       /* REP Colors */
@@ -33,15 +33,20 @@
       color: var(--text-main);
       font-family: var(--font-stack);
       overflow: hidden;
+      animation: antiGhosting 2s infinite linear;
     }
 
-    @keyframes linux-repaint-jitter {
+    @keyframes antiGhosting {
       0% {
-        padding-bottom: 10px;
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.999;
       }
 
       100% {
-        padding-bottom: 10.01px;
+        opacity: 1;
       }
     }
 
@@ -54,8 +59,6 @@
       backdrop-filter: blur(12px);
       padding: 10px;
       border: 1px solid var(--border-color);
-      /* Force constant repaints on Linux via tiny size jitter */
-      animation: linux-repaint-jitter 0.1s infinite;
     }
 
     #header {

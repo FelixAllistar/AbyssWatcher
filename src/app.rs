@@ -290,14 +290,14 @@ pub fn run() {
             let handle = app.handle().clone();
             
             // KDE Always-On-Top "Double-Tap" Fix
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.set_always_on_top(true);
-                let w_clone = window.clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(500));
-                    let _ = w_clone.set_always_on_top(true);
-                });
-            }
+            // if let Some(window) = app.get_webview_window("main") {
+            //     let _ = window.set_always_on_top(true);
+            //     let w_clone = window.clone();
+            //     std::thread::spawn(move || {
+            //         std::thread::sleep(std::time::Duration::from_millis(500));
+            //         let _ = w_clone.set_always_on_top(true);
+            //     });
+            // }
             
             // Initialize Config
             let config_dir = app.path().app_config_dir().unwrap_or(PathBuf::from("."));
