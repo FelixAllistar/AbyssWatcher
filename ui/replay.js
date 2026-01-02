@@ -27,7 +27,8 @@ try {
 
   // State
   let characters = {}; // Grouped logs
-  let isPlaying = false;
+  let isSessionActive = false;
+  let isScrubbing = false;
   let currentLogDir = "";
 
   function renderLogRow(log) {
@@ -110,14 +111,12 @@ try {
   }
 
   async function init() {
-    // 1. Initial Data Fetch
     try {
         const settings = await invoke("get_settings");
         currentLogDir = settings.gamelog_dir;
         await refreshLogs(currentLogDir);
     } catch (e) { console.error(e); }
 
-    // 2. Event Listeners
     els.toggleLogsBtn.onclick = () => {
         els.sessionPanel.classList.toggle("hidden");
     };
@@ -133,23 +132,79 @@ try {
     };
     
     els.playPauseBtn.onclick = async () => {
-        isPlaying = !isPlaying;
-        els.playPauseBtn.textContent = isPlaying ? "Pause" : "Play";
-        // TODO: Start replay with selected logs
+        if (!isSessionActive) {
+            // Start new session
+            const selectedLogs = [];
+            Object.entries(characters).forEach(([char, logs]) => {
+                logs.forEach(log => {
+                    if (log.enabled) {
+                        selectedLogs.push([char, log.path]);
+                    }
+                });
+            });
+
+            if (selectedLogs.length === 0) {
+                alert("Please select at least one log file.");
+                return;
+            }
+
+            try {
+                const duration = await invoke("start_replay", { logs: selectedLogs });
+                isSessionActive = true;
+                els.playPauseBtn.textContent = "Pause";
+                els.sessionPanel.classList.add("hidden"); 
+                els.timeline.max = duration;
+                els.timeline.value = 0;
+            } catch (e) {
+                alert("Error starting replay: " + e);
+            }
+        } else {
+            // Toggle pause
+            await invoke("toggle_replay_pause");
+            isSessionActive = true; // Still active
+            // Note: We don't really track playing state perfectly here yet
+        }
     };
     
     els.speedSelect.onchange = async () => {
         const speed = parseFloat(els.speedSelect.value);
-        // invoke("replay_set_speed", { speed })
+        await invoke("set_replay_speed", { speed });
     };
 
+    els.timeline.onmousedown = () => isScrubbing = true;
+    window.addEventListener("mouseup", () => isScrubbing = false);
+
+    let seekTimeout = null;
     els.timeline.oninput = async () => {
-        // invoke("replay_scrub", { timestamp: ... })
+        const offset = parseInt(els.timeline.value);
+        
+        if (seekTimeout) clearTimeout(seekTimeout);
+        seekTimeout = setTimeout(async () => {
+            await invoke("seek_replay", { offsetSecs: offset });
+        }, 50); // 50ms debounce
     };
 
     // 3. Listen for updates
-    await listen("dps-update", (e) => {
-         Components.updateUI(els, e.payload, []);
+    await listen("replay-dps-update", (e) => {
+         const data = e.payload;
+         // Extract character names from combat_actions_by_character keys
+         const replayChars = Object.keys(data.combat_actions_by_character || {}).map(name => ({
+             character: name,
+             tracked: true
+         }));
+         Components.updateUI(els, data, replayChars);
+    });
+
+    await listen("replay-status", (e) => {
+        const { current_time, progress } = e.payload;
+        // Update time display
+        const minutes = Math.floor(progress / 60);
+        const seconds = Math.floor(progress % 60);
+        els.timeDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        
+        if (!isScrubbing) {
+            els.timeline.value = progress;
+        }
     });
   }
 

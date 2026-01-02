@@ -1,14 +1,23 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Mutex, Arc, RwLock};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tauri::{Emitter, Manager, State, WebviewWindowBuilder, WebviewUrl};
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::mpsc;
-use abyss_watcher::core::{log_io, coordinator, config::{ConfigManager, Settings}};
+use abyss_watcher::core::{log_io, coordinator, config::{ConfigManager, Settings}, replay_engine, state::EngineState};
+
+static REPLAY_SESSION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 enum LoopCommand {
     Replay,
+}
+
+struct ReplaySession {
+    controller: replay_engine::ReplayController,
+    engine: EngineState,
+    id: u64,
 }
 
 struct AppState {
@@ -16,10 +25,12 @@ struct AppState {
     settings: Mutex<Settings>,
     config_manager: ConfigManager,
     loop_tx: mpsc::Sender<LoopCommand>,
+    replay: Arc<RwLock<Option<ReplaySession>>>,
 }
 
 #[tauri::command]
 async fn open_replay_window(app: tauri::AppHandle) -> Result<(), String> {
+    println!("Opening replay window...");
     if let Some(window) = app.get_webview_window("replay") {
         window.set_focus().map_err(|e| e.to_string())?;
     } else {
@@ -37,7 +48,7 @@ async fn open_replay_window(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn get_replay_sessions(path: Option<PathBuf>, state: State<'_, AppState>) -> Result<Vec<log_io::Session>, String> {
+async fn get_logs_by_character(path: Option<PathBuf>, state: State<'_, AppState>) -> Result<HashMap<String, Vec<log_io::CharacterLog>>, String> {
     let target_dir = if let Some(p) = path {
         p
     } else {
@@ -45,9 +56,124 @@ async fn get_replay_sessions(path: Option<PathBuf>, state: State<'_, AppState>) 
         settings.gamelog_dir.clone()
     };
 
+    println!("Scanning logs in {:?}", target_dir);
     let logs = log_io::scan_all_logs(&target_dir).map_err(|e| e.to_string())?;
-    let sessions = log_io::group_sessions(logs);
-    Ok(sessions)
+    let groups = log_io::group_logs_by_character(logs);
+    println!("Found {} characters with logs.", groups.len());
+    Ok(groups)
+}
+
+#[tauri::command]
+async fn start_replay(logs: Vec<(String, PathBuf)>, state: State<'_, AppState>, app: tauri::AppHandle) -> Result<u64, String> {
+    println!("Starting replay with {} logs...", logs.len());
+    let controller = replay_engine::ReplayController::new(logs).ok_or("Failed to initialize replay controller")?;
+    let duration = controller.session_duration().as_secs();
+    
+    let session_id = REPLAY_SESSION_COUNTER.fetch_add(1, Ordering::SeqCst) + 1;
+
+    {
+        let mut replay = state.replay.write().unwrap();
+        let mut session = ReplaySession {
+            controller,
+            engine: EngineState::new(),
+            id: session_id,
+        };
+        session.controller.set_state(replay_engine::PlaybackState::Playing);
+        *replay = Some(session);
+    }
+    
+    let handle = app.clone();
+    let replay_state = state.replay.clone();
+    
+    tauri::async_runtime::spawn(async move {
+        println!("Replay loop {} started.", session_id);
+        loop {
+            // Check if this session is still the active one
+            {
+                let replay_lock = replay_state.read().unwrap();
+                match &*replay_lock {
+                    Some(s) if s.id == session_id => {} // Continue
+                    _ => {
+                        println!("Replay loop {} terminating.", session_id);
+                        break;
+                    }
+                }
+            }
+
+            let (events_count, current_sim_time, progress) = {
+                let mut replay_lock = replay_state.write().unwrap();
+                if let Some(session) = replay_lock.as_mut() {
+                    let events = session.controller.tick();
+                    let count = events.len();
+                    for event in events {
+                        session.engine.push_event(event);
+                    }
+                    (count, session.controller.current_sim_time(), session.controller.relative_progress())
+                } else {
+                    return;
+                }
+            };
+
+            // Emit updates
+            {
+                let mut replay_lock = replay_state.write().unwrap();
+                if let Some(session) = replay_lock.as_mut() {
+                    let dps_window = Duration::from_secs(5);
+                    let samples = session.engine.dps_series(dps_window, current_sim_time);
+                    if let Some(sample) = samples.into_iter().last() {
+                         if events_count > 0 {
+                             println!("Replay loop {}: Processed {} events. Out DPS: {:.1}", session_id, events_count, sample.outgoing_dps);
+                         }
+                         let _ = handle.emit("replay-dps-update", sample);
+                    }
+                    
+                    let status = serde_json::json!({
+                        "current_time": current_sim_time.as_secs(),
+                        "progress": progress.as_secs(),
+                    });
+                    let _ = handle.emit("replay-status", status);
+                }
+            }
+
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    });
+
+    Ok(duration)
+}
+
+#[tauri::command]
+fn seek_replay(offset_secs: u64, state: State<'_, AppState>) -> Result<(), String> {
+    let mut replay = state.replay.write().unwrap();
+    if let Some(session) = replay.as_mut() {
+        session.controller.seek(Duration::from_secs(offset_secs)).map_err(|e| e.to_string())?;
+        session.engine = EngineState::new(); 
+        println!("Seeked replay to {}s", offset_secs);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn toggle_replay_pause(state: State<'_, AppState>) {
+    let mut replay = state.replay.write().unwrap();
+    if let Some(session) = replay.as_mut() {
+        let current = session.controller.get_state();
+        let next = match current {
+            replay_engine::PlaybackState::Playing => replay_engine::PlaybackState::Paused,
+            replay_engine::PlaybackState::Paused => replay_engine::PlaybackState::Playing,
+        };
+        session.controller.set_state(next);
+        println!("Replay paused: {:?}", next == replay_engine::PlaybackState::Paused);
+    }
+}
+
+#[tauri::command]
+fn set_replay_speed(speed: f64, state: State<'_, AppState>) {
+    let mut replay = state.replay.write().unwrap();
+    if let Some(session) = replay.as_mut() {
+        session.controller.set_speed(speed);
+        println!("Replay speed set to {}", speed);
+    }
 }
 
 #[tauri::command]
@@ -133,6 +259,7 @@ pub fn run() {
                 settings: Mutex::new(settings),
                 config_manager,
                 loop_tx: tx,
+                replay: Arc::new(RwLock::new(None)),
             });
 
             if cfg!(debug_assertions) {
@@ -148,6 +275,7 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 let mut current_log_dir = initial_settings.gamelog_dir.clone();
                 let mut coordinator = coordinator::Coordinator::new(current_log_dir.clone());
+                println!("Background log watcher started. Monitoring: {:?}", current_log_dir);
 
                 loop {
                     // Check for commands from the frontend
@@ -171,6 +299,7 @@ pub fn run() {
                     if current_settings.gamelog_dir != current_log_dir {
                         current_log_dir = current_settings.gamelog_dir.clone();
                         coordinator = coordinator::Coordinator::new(current_log_dir.clone());
+                        println!("Log directory changed to {:?}", current_log_dir);
                     }
 
                     // Hot-reload: DPS Window
@@ -197,7 +326,11 @@ pub fn run() {
             pick_gamelog_dir,
             replay_logs,
             open_replay_window,
-            get_replay_sessions
+            get_logs_by_character,
+            start_replay,
+            toggle_replay_pause,
+            set_replay_speed,
+            seek_replay
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
