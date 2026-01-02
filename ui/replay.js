@@ -3,13 +3,17 @@ try {
   const { invoke } = window.__TAURI__.core;
 
   const els = {
+    toggleDebugBtn: document.getElementById("toggle-debug"),
     toggleLogsBtn: document.getElementById("toggle-logs"),
     browseBtn: document.getElementById("browse-btn"),
     sessionPath: document.getElementById("session-path"),
     sessionList: document.getElementById("session-list"),
     sessionPanel: document.getElementById("session-panel"),
+    debugPanel: document.getElementById("debug-panel"),
+    rawLogsList: document.getElementById("raw-logs-list"),
     
     playPauseBtn: document.getElementById("play-pause-btn"),
+    stepBtn: document.getElementById("step-btn"),
     timeline: document.getElementById("timeline"),
     timeDisplay: document.getElementById("time-display"),
     speedSelect: document.getElementById("speed-select"),
@@ -117,6 +121,10 @@ try {
         await refreshLogs(currentLogDir);
     } catch (e) { console.error(e); }
 
+    els.toggleDebugBtn.onclick = () => {
+        els.debugPanel.classList.toggle("hidden");
+    };
+
     els.toggleLogsBtn.onclick = () => {
         els.sessionPanel.classList.toggle("hidden");
     };
@@ -160,9 +168,16 @@ try {
             }
         } else {
             // Toggle pause
-            await invoke("toggle_replay_pause");
-            isSessionActive = true; // Still active
-            // Note: We don't really track playing state perfectly here yet
+            try {
+                const isPaused = await invoke("toggle_replay_pause");
+                els.playPauseBtn.textContent = isPaused ? "Play" : "Pause";
+            } catch (e) { console.error(e); }
+        }
+    };
+
+    els.stepBtn.onclick = async () => {
+        if (isSessionActive) {
+            await invoke("step_replay");
         }
     };
     
@@ -205,6 +220,22 @@ try {
         if (!isScrubbing) {
             els.timeline.value = progress;
         }
+    });
+
+    await listen("replay-raw-lines", (e) => {
+        const lines = e.payload;
+        lines.forEach(line => {
+            const div = document.createElement("div");
+            div.textContent = line;
+            els.rawLogsList.appendChild(div);
+        });
+        
+        // Keep last 100 lines to avoid DOM bloat
+        while (els.rawLogsList.children.length > 100) {
+            els.rawLogsList.removeChild(els.rawLogsList.firstChild);
+        }
+        
+        els.rawLogsList.scrollTop = els.rawLogsList.scrollHeight;
     });
   }
 

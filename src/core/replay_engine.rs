@@ -12,7 +12,7 @@ pub struct MergedStream {
 struct LogSource {
     reader: BufReader<File>,
     character: String,
-    next_event: Option<CombatEvent>,
+    next_event: Option<(CombatEvent, String)>,
     parser: LineParser,
 }
 
@@ -36,12 +36,12 @@ impl MergedStream {
         Ok(Self { sources })
     }
 
-    pub fn next_event(&mut self) -> Option<CombatEvent> {
+    pub fn next_event(&mut self) -> Option<(CombatEvent, String)> {
         let mut earliest_idx = None;
         let mut earliest_time = None;
 
         for (idx, source) in self.sources.iter().enumerate() {
-            if let Some(event) = &source.next_event {
+            if let Some((event, _)) = &source.next_event {
                 if earliest_time.is_none() || event.timestamp < earliest_time.unwrap() {
                     earliest_time = Some(event.timestamp);
                     earliest_idx = Some(idx);
@@ -61,16 +61,19 @@ impl MergedStream {
 
     pub fn peek_time(&self) -> Option<Duration> {
         self.sources.iter()
-            .filter_map(|s| s.next_event.as_ref().map(|e| e.timestamp))
+            .filter_map(|s| s.next_event.as_ref().map(|(e, _)| e.timestamp))
             .min()
     }
 }
 
-fn read_next_event(reader: &mut BufReader<File>, parser: &mut LineParser, character: &str) -> Option<CombatEvent> {
+fn read_next_event(reader: &mut BufReader<File>, parser: &mut LineParser, character: &str) -> Option<(CombatEvent, String)> {
     let mut line = String::new();
     while reader.read_line(&mut line).ok()? > 0 {
-        if let Some(event) = parser.parse_line(line.trim(), character) {
-            return Some(event);
+        let trimmed = line.trim();
+        if !trimmed.is_empty() {
+            if let Some(event) = parser.parse_line(trimmed, character) {
+                return Some((event, trimmed.to_string()));
+            }
         }
         line.clear();
     }
@@ -148,29 +151,36 @@ impl ReplayController {
         self.speed = speed;
     }
 
-    pub fn tick(&mut self) -> Vec<CombatEvent> {
+    pub fn step(&mut self, delta: Duration) {
+        self.current_sim_time += delta;
+        self.last_update_wall_time = SystemTime::now(); // Reset wall clock to prevent 'jump' if play resumed
+    }
+
+    pub fn tick(&mut self) -> (Vec<CombatEvent>, Vec<String>) {
         let now = SystemTime::now();
         let elapsed_wall = now.duration_since(self.last_update_wall_time).unwrap_or(Duration::ZERO);
         self.last_update_wall_time = now;
 
         if self.state == PlaybackState::Paused {
-            // Still need to return empty unless we logic-gated seeking elsewhere
-        } else {
-            let elapsed_sim = Duration::from_secs_f64(elapsed_wall.as_secs_f64() * self.speed);
-            self.current_sim_time += elapsed_sim;
+            return (Vec::new(), Vec::new());
         }
 
+        let elapsed_sim = Duration::from_secs_f64(elapsed_wall.as_secs_f64() * self.speed);
+        self.current_sim_time += elapsed_sim;
+
         let mut events = Vec::new();
+        let mut lines = Vec::new();
         while let Some(next_time) = self.stream.peek_time() {
             if next_time <= self.current_sim_time {
-                if let Some(event) = self.stream.next_event() {
+                if let Some((event, line)) = self.stream.next_event() {
                     events.push(event);
+                    lines.push(line);
                 }
             } else {
                 break;
             }
         }
-        events
+        (events, lines)
     }
 
     pub fn current_sim_time(&self) -> Duration {

@@ -4,6 +4,7 @@ pub mod model;
 pub mod parser;
 pub mod state;
 pub mod tracker;
+pub mod replay_engine;
 
 #[cfg(test)]
 mod sim_test;

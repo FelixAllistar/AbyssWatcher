@@ -155,6 +155,18 @@ pub fn scan_all_logs(dir: impl AsRef<Path>) -> io::Result<Vec<CharacterLog>> {
     Ok(logs)
 }
 
+pub fn group_logs_by_character(logs: Vec<CharacterLog>) -> HashMap<String, Vec<CharacterLog>> {
+    let mut groups: HashMap<String, Vec<CharacterLog>> = HashMap::new();
+    for log in logs {
+        groups.entry(log.character.clone()).or_default().push(log);
+    }
+    // Sort logs within each group
+    for list in groups.values_mut() {
+        list.sort_by(|a, b| b.session_start.cmp(&a.session_start));
+    }
+    groups
+}
+
 pub fn scan_gamelogs_dir(dir: impl AsRef<Path>) -> io::Result<Vec<CharacterLog>> {
     let mut per_character: HashMap<String, CharacterLog> = HashMap::new();
 
@@ -174,47 +186,6 @@ pub fn scan_gamelogs_dir(dir: impl AsRef<Path>) -> io::Result<Vec<CharacterLog>>
     logs.sort_by(|a, b| b.last_modified.cmp(&a.last_modified));
     Ok(logs)
 }
-
-pub fn group_sessions(mut logs: Vec<CharacterLog>) -> Vec<Session> {
-    if logs.is_empty() {
-        return Vec::new();
-    }
-
-    // Sort by Session Start Descending
-    logs.sort_by(|a, b| b.session_start.cmp(&a.session_start));
-
-    let mut sessions: Vec<Session> = Vec::new();
-    let tolerance = std::time::Duration::from_secs(300); // 5 minutes window
-
-    for log in logs {
-        let mut placed = false;
-        
-        for session in &mut sessions {
-            let diff = if session.timestamp > log.session_start {
-                session.timestamp.duration_since(log.session_start).unwrap_or(std::time::Duration::ZERO)
-            } else {
-                log.session_start.duration_since(session.timestamp).unwrap_or(std::time::Duration::ZERO)
-            };
-
-            if diff <= tolerance {
-                session.logs.push(log.clone());
-                placed = true;
-                break;
-            }
-        }
-
-        if !placed {
-            sessions.push(Session {
-                id: format!("{:?}", log.session_start), // Simple ID
-                timestamp: log.session_start,
-                logs: vec![log],
-            });
-        }
-    }
-
-    sessions
-}
-
 
 #[allow(dead_code)]
 pub fn read_full_lines(path: impl AsRef<Path>) -> io::Result<Vec<String>> {
@@ -279,22 +250,17 @@ mod tests {
     }
 
     #[test]
-    fn test_group_sessions() {
+    fn test_group_logs_by_character() {
         let dir = tempdir().unwrap();
-        // Session 1: 12:00
         create_dummy_log(dir.path().join("s1_a.txt"), "CharA", "2024.01.01 12:00:00");
         create_dummy_log(dir.path().join("s1_b.txt"), "CharB", "2024.01.01 12:00:05");
-        
-        // Session 2: 14:00
         create_dummy_log(dir.path().join("s2_a.txt"), "CharA", "2024.01.01 14:00:00");
 
         let logs = scan_all_logs(dir.path()).unwrap();
-        let sessions = group_sessions(logs);
+        let groups = group_logs_by_character(logs);
 
-        assert_eq!(sessions.len(), 2);
-        
-        // Sorted desc: Session 2 (14:00) should be first
-        assert_eq!(sessions[0].logs.len(), 1); // CharA
-        assert_eq!(sessions[1].logs.len(), 2); // CharA + CharB
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups.get("CharA").unwrap().len(), 2);
+        assert_eq!(groups.get("CharB").unwrap().len(), 1);
     }
 }

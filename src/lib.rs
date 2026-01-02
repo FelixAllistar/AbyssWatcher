@@ -8,6 +8,7 @@ pub mod core {
     pub mod watcher;
     pub mod coordinator;
     pub mod config;
+    pub mod replay_engine;
     #[cfg(test)]
     pub mod sim_test;
     #[cfg(test)]

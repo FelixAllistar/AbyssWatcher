@@ -100,15 +100,14 @@ async fn start_replay(logs: Vec<(String, PathBuf)>, state: State<'_, AppState>, 
                 }
             }
 
-            let (events_count, current_sim_time, progress) = {
+            let (events, lines, current_sim_time, progress) = {
                 let mut replay_lock = replay_state.write().unwrap();
                 if let Some(session) = replay_lock.as_mut() {
-                    let events = session.controller.tick();
-                    let count = events.len();
-                    for event in events {
-                        session.engine.push_event(event);
+                    let (events, lines) = session.controller.tick();
+                    for event in &events {
+                        session.engine.push_event(event.clone());
                     }
-                    (count, session.controller.current_sim_time(), session.controller.relative_progress())
+                    (events, lines, session.controller.current_sim_time(), session.controller.relative_progress())
                 } else {
                     return;
                 }
@@ -121,10 +120,14 @@ async fn start_replay(logs: Vec<(String, PathBuf)>, state: State<'_, AppState>, 
                     let dps_window = Duration::from_secs(5);
                     let samples = session.engine.dps_series(dps_window, current_sim_time);
                     if let Some(sample) = samples.into_iter().last() {
-                         if events_count > 0 {
-                             println!("Replay loop {}: Processed {} events. Out DPS: {:.1}", session_id, events_count, sample.outgoing_dps);
+                         if !events.is_empty() {
+                             println!("Replay loop {}: Processed {} events. Out DPS: {:.1}", session_id, events.len(), sample.outgoing_dps);
                          }
                          let _ = handle.emit("replay-dps-update", sample);
+                    }
+                    
+                    if !lines.is_empty() {
+                        let _ = handle.emit("replay-raw-lines", lines);
                     }
                     
                     let status = serde_json::json!({
@@ -165,6 +168,39 @@ fn toggle_replay_pause(state: State<'_, AppState>) {
         session.controller.set_state(next);
         println!("Replay paused: {:?}", next == replay_engine::PlaybackState::Paused);
     }
+}
+
+#[tauri::command]
+fn step_replay(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<(), String> {
+    let mut replay_lock = state.replay.write().unwrap();
+    if let Some(session) = replay_lock.as_mut() {
+        session.controller.step(Duration::from_secs(1));
+        
+        // Process any events in that step
+        let (events, lines) = session.controller.tick();
+        for event in &events {
+            session.engine.push_event(event.clone());
+        }
+        
+        let sim_time = session.controller.current_sim_time();
+        let progress = session.controller.relative_progress();
+        
+        // Manual emit for the step
+        let dps_window = Duration::from_secs(5);
+        let samples = session.engine.dps_series(dps_window, sim_time);
+        if let Some(sample) = samples.into_iter().last() {
+             let _ = app.emit("replay-dps-update", sample);
+        }
+        if !lines.is_empty() {
+            let _ = app.emit("replay-raw-lines", lines);
+        }
+        let status = serde_json::json!({
+            "current_time": sim_time.as_secs(),
+            "progress": progress.as_secs(),
+        });
+        let _ = app.emit("replay-status", status);
+    }
+    Ok(())
 }
 
 #[tauri::command]

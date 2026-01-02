@@ -19,3 +19,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 ## [x] Track: UI Capacitor & Neut Metrics
 
 *Link: [./conductor/tracks/ui_cap_neut_20251231/](./conductor/tracks/ui_cap_neut_20251231/)*
+
+---
+
+## [~] Track: Advanced Multi-Character Replay Suite
+*Link: [./conductor/tracks/advanced_replay_suite_20260101/](./conductor/tracks/advanced_replay_suite_20260101/)*
