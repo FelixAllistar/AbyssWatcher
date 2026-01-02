@@ -1,24 +1,28 @@
 [package]
 name = "abyss-watcher"
 version = "0.1.0"
- authors = ["Felix Allistar <147667330+FelixAllistar@users.noreply.github.com>"]
- edition = "2021"
+authors = ["Felix Allistar <147667330+FelixAllistar@users.noreply.github.com>"]
+edition = "2021"
+description = "AbyssWatcher Tauri Frontend"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[build-dependencies]
+tauri-build = { version = "2.0.4", features = [] }
 
- [dependencies]
+[dependencies]
 lazy_static = "1.5.0"
- serde = { version = "1.0", features = ["derive"] }
- serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 chrono = "0.4.20"
 regex = "1.5.5"
-  tokio = { version = "1.0", features = ["full"] }
-  tao = "0.34"
-eframe = { version = "0.27", default-features = true }
-egui_plot = "0.27.2"
+tokio = { version = "1.0", features = ["full"] }
+log = "0.4"
+tauri = { version = "2.2.4", features = [] }
+tauri-plugin-log = "2.0.0-rc"
+tauri-plugin-dialog = "2.4.2"
 
-[dev-dependencies]
-tempfile = "3.3"
+[lib]
+name = "abyss_watcher"
+crate-type = ["staticlib", "cdylib", "rlib"]
 
 [features]
 default = []

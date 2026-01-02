@@ -101,7 +101,7 @@ pub struct ReplayController {
 
 impl ReplayController {
     pub fn new(paths: Vec<(String, PathBuf)>) -> Option<Self> {
-        let mut stream = MergedStream::new(paths.clone()).ok()?;
+        let stream = MergedStream::new(paths.clone()).ok()?;
         let start_time = stream.peek_time()?;
         
         let mut end_time = start_time;

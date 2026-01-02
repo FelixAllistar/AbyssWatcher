@@ -14,3 +14,6 @@ pub mod core {
     #[cfg(test)]
     pub mod bench_analysis;
 }
+
+pub mod app;
+pub use app::run;

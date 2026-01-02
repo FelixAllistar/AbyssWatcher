@@ -6,7 +6,7 @@ use std::time::Duration;
 use tauri::{Emitter, Manager, State, WebviewWindowBuilder, WebviewUrl};
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::mpsc;
-use abyss_watcher::core::{log_io, coordinator, config::{ConfigManager, Settings}, replay_engine, state::EngineState};
+use crate::core::{log_io, coordinator, config::{ConfigManager, Settings}, replay_engine, state::EngineState};
 
 static REPLAY_SESSION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -366,7 +366,8 @@ pub fn run() {
             start_replay,
             toggle_replay_pause,
             set_replay_speed,
-            seek_replay
+            seek_replay,
+            step_replay
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
