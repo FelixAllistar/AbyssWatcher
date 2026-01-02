@@ -2,22 +2,26 @@ try {
     const { listen } = window.__TAURI__.event;
     const { invoke } = window.__TAURI__.core;
 
-    // ===== Linux Ghosting Fix: MutationObserver Watchdog =====
-    // Detects DOM changes and triggers a micro-resize to clear transparency buffer
-    let ghostingFixTimeout;
-    const triggerRefresh = () => {
-        clearTimeout(ghostingFixTimeout);
-        ghostingFixTimeout = setTimeout(() => {
-            invoke('refresh_transparency');
-        }, 50); // Debounce: wait 50ms after last change
+    // ===== Linux Ghosting Fix: Debounced Resize =====
+    // Strategy: Only trigger the expensive resize when updates PAUSE.
+    // This prevents freezing during high-DPS streams.
+
+    let debounceTimer;
+    const triggerDebouncedRefresh = () => {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            invoke('refresh_transparency').catch(e => console.error(e));
+            debounceTimer = null;
+        }, 200); // Wait for 200ms of silence before refreshing
     };
-    const ghostingObserver = new MutationObserver(() => triggerRefresh());
+
+    const ghostingObserver = new MutationObserver(() => triggerDebouncedRefresh());
     ghostingObserver.observe(document.body, {
-        attributes: true,
-        attributeFilter: ['class'], // Only watch class changes (hidden toggle), not layout attributes
         childList: true,
         subtree: true,
-        characterData: true
+        characterData: true,
+        attributes: true,
+        attributeFilter: ['style', 'class'] // Only watch visual changes
     });
     // ===== End Linux Ghosting Fix =====
 
@@ -81,6 +85,7 @@ try {
                 await invoke("save_settings", { settings: newSettings });
                 els.settingsModal.classList.add("hidden");
                 characters = await invoke("get_available_characters");
+                console.log("Settings saved. Reloaded characters:", characters);
                 renderSelection();
             } catch (e) { console.error(e); }
         };
@@ -101,8 +106,9 @@ try {
             els.dpsWindowInput.value = settings.dps_window_seconds;
 
             characters = await invoke("get_available_characters");
+            console.log("Init loaded characters:", characters);
             renderSelection();
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error("Init failed:", e); }
 
         // 3. Listen
         await listen("dps-update", (e) => Components.updateUI(els, e.payload, characters));

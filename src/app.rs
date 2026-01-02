@@ -10,9 +10,7 @@ use crate::core::{log_io, coordinator, config::{ConfigManager, Settings}, replay
 
 static REPLAY_SESSION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-lazy_static::lazy_static! {
-    static ref REFRESHING: AtomicBool = AtomicBool::new(false);
-}
+
 
 enum LoopCommand {
     Replay,
@@ -284,28 +282,7 @@ fn toggle_tracking(path: PathBuf, state: State<'_, AppState>) {
     }
 }
 
-/// Forces the Linux compositor to clear the transparency buffer by doing a micro-resize.
-#[tauri::command]
-fn refresh_transparency(window: tauri::Window) {
-    if REFRESHING.swap(true, Ordering::SeqCst) {
-        return;
-    }
 
-    // Get the EXACT current physical size and re-apply it
-    // This triggers a compositor refresh without changing dimensions
-    if let Ok(size) = window.inner_size() {
-        let w_clone = window.clone();
-        std::thread::spawn(move || {
-            // Shrink by 1 physical pixel, then restore to exact original
-            let _ = w_clone.set_size(tauri::PhysicalSize::new(size.width, size.height.saturating_sub(1)));
-            std::thread::sleep(std::time::Duration::from_millis(5));
-            let _ = w_clone.set_size(size); // Restore EXACT original PhysicalSize
-            REFRESHING.store(false, Ordering::SeqCst);
-        });
-    } else {
-        REFRESHING.store(false, Ordering::SeqCst);
-    }
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -409,8 +386,7 @@ pub fn run() {
             toggle_replay_pause,
             set_replay_speed,
             seek_replay,
-            step_replay,
-            refresh_transparency
+            step_replay
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

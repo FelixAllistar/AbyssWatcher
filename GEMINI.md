@@ -78,9 +78,10 @@ Follow these guidelines from `conductor/product-guidelines.md`:
 
 Due to Linux compositor behaviors (especially KDE/Plasma), specific workarounds are maintained:
 
-### 1. Transparency Ghosting Fix
-- **Problem**: OS compositors sometimes fail to clear the buffer of transparent windows, leaving "ghost" artifacts when UI elements move or hide.
-- **Fix**: A MutationObserver in `ui/main.js` watches for DOM content changes (childList and characterData). When a change is detected, it calls the `refresh_transparency` Rust command (in `src/app.rs`) which performs an imperceptible 0.1 logical pixel window height resize, forcing the compositor to clear its buffer. A thread-safe atomic lock and 50ms debounce prevent performance issues and visual flashing during rapid updates.
+### 1. Transparency Disabled (Linux)
+- **Context**: Linux compositors (especially Wayland/WebKitGTK) exhibit severe artifacting (ghosting) and instability (freezing) with transparent windows.
+- **Decision**: Transparency is explicitly **DISABLED** (`transparent: false` in `tauri.conf.json`) in favor of application stability and performance. The window uses a solid background.
+- **Visuals**: `backdrop-filter` is enabled in CSS to provide a premium "glass" look for internal UI elements (modals/panels) against the solid window background.
 
 ### 2. Always-On-Top "Double-Tap"
 - **Problem**: Some Linux window managers (KDE) ignore the `alwaysOnTop` setting in `tauri.conf.json` during initial window creation.
