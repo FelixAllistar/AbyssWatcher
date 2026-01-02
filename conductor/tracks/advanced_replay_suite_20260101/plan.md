@@ -19,11 +19,11 @@
 - [x] Task: Implement `core::replay_engine::ReplayController` to manage playback state (Play/Pause, Speed Multiplier, Manual Ticking). 1d3464d
 - [x] Task: Implement the "Live Simulation" timer logic in the backend to push updates to the frontend at the correct relative intervals. 1d3464d
 - [x] Task: Connect the Replay Engine to the existing `core::analysis` logic to produce DPS/HPS metrics. 1d3464d
-- [ ] Task: Conductor - User Manual Verification 'Synchronized Playback Engine' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Synchronized Playback Engine' (Protocol in workflow.md) [checkpoint: 6c553a1]
 
 ## Phase 4: Advanced Controls & Debugging
-- [ ] Task: Implement the Playback Dashboard in the frontend (Timeline Slider, Speed Selector, Play/Pause).
-- [ ] Task: Implement "Timeline Scrubbing" by re-processing the log stream up to the selected timestamp.
-- [ ] Task: Implement the toggleable "Raw Log Debug Panel" component.
+- [x] Task: Implement the Playback Dashboard in the frontend (Timeline Slider, Speed Selector, Play/Pause). de2f675
+- [x] Task: Implement "Timeline Scrubbing" by re-processing the log stream up to the selected timestamp. de2f675
+- [~] Task: Implement the toggleable "Raw Log Debug Panel" component.
 - [ ] Task: Add "Step Forward" button to advance the simulation by one event or one second.
 - [ ] Task: Conductor - User Manual Verification 'Advanced Controls & Debugging' (Protocol in workflow.md)
