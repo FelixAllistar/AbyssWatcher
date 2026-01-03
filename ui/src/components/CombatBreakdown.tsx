@@ -176,18 +176,6 @@ const CombatBreakdown: FC<CombatBreakdownProps> = ({ data, characters }) => {
         return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
     }, [data, characters]);
 
-    if (activeData.length === 0) {
-        return (
-            <div id="combat-breakdown">
-                <div className="empty-state">
-                    <span className="text-dim" style={{ fontSize: '11px', opacity: 0.5, fontStyle: 'italic' }}>
-                        Select characters.
-                    </span>
-                </div>
-            </div>
-        );
-    }
-
     return (
         <div id="combat-breakdown">
             {activeData.map(([name, actions]) => (
