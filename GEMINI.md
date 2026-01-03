@@ -15,7 +15,8 @@ AbyssWatcher is a high-performance DPS Meter for EVE Online, built as a modern d
   - `src/app.rs`: The core Tauri application logic, command handlers, and state management.
   - `src/core/`: Application domain logic, strictly separated from the UI.
     - `model.rs`: Combat events, DPS samples, fight summaries.
-    - `parser.rs`: Regex-based log line parsing (`(combat)` lines).
+    - `parser.rs`: Right-to-left positional parsing of combat logs.
+      - **Right-to-Left Strategy**: Pops known Quality (Hits, etc.), then pops Weapon, then joins remainder as Entity. This correctly handles target names with dashes (e.g., "Habitation Module - Breeding Facility") and optional quality suffixes.
     - `log_io.rs`: Efficient log tailing and historical scanning.
     - `analysis.rs`: DPS computation and time-series aggregation.
     - `state.rs`: The `EngineState` that holds combat history.
