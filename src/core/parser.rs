@@ -242,49 +242,41 @@ fn split_entities_and_weapon(
     // Quality suffixes for damage
     let qualities = ["hits", "misses", "grazes", "glances", "scratches", "penetrates", "smashes", "wrecks"];
 
-    let mut parts: Vec<&str> = remainder.split(" - ").map(|s| s.trim()).collect();
-    // Filter out empty parts caused by " - - "
-    parts.retain(|s| !s.is_empty());
+    let mut parts: Vec<&str> = remainder.split(" - ").map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
 
-    let (mut text_part, mut weapon) = match event_type {
+    // Right-to-left parsing:
+    // 1. Pop Quality (if rightmost matches known quality word)
+    // 2. Pop Weapon (next segment from right)
+    // 3. Everything remaining is the Entity (joined back with " - ")
+
+    let mut weapon = String::new();
+
+    match event_type {
         EventType::Damage => {
-            if parts.is_empty() {
-                ("", "".to_string())
-            } else if parts.len() >= 3 {
-                // [Text, Weapon, Quality]
-                (parts[0], parts[1].trim_start_matches('-').trim().to_string())
-            } else if parts.len() == 2 {
-                // Could be [Text, Weapon] or [Text, Quality]
-                let last = parts[1].to_lowercase();
-                if qualities.iter().any(|&q| last.contains(q)) {
-                    // It's a quality, weapon is empty
-                    (parts[0], "".to_string())
-                } else {
-                    // It's a weapon
-                    (parts[0], parts[1].trim_start_matches('-').trim().to_string())
-                }
-            } else {
-                (parts[0], "".to_string())
+            // Check if rightmost is a quality word
+            if parts.last().map(|s| qualities.iter().any(|q| s.to_lowercase().contains(q))).unwrap_or(false) {
+                parts.pop(); // Remove quality
+            }
+            // Weapon is now the rightmost (if more than 1 part remains)
+            if parts.len() > 1 {
+                weapon = parts.pop().unwrap_or("").trim_start_matches('-').trim().to_string();
             }
         }
         _ => {
-            // Repair, Cap, Neut: [Text, Weapon] or [Text]
-            if parts.len() >= 2 {
-                // Tag-stripped logs often have " - - Weapon". 
-                (parts[0], parts.last().unwrap_or(&"").trim_start_matches('-').trim().to_string())
-            } else if !parts.is_empty() {
-                (parts[0], "".to_string())
-            } else {
-                ("", "".to_string())
+            // Repair, Cap, Neut: Weapon is always the last part (if multiple parts exist)
+            if parts.len() > 1 {
+                weapon = parts.pop().unwrap_or("").trim_start_matches('-').trim().to_string();
             }
         }
-    };
+    }
 
-    let mut entity_name = "";
+    // Remaining parts form the Entity text (joined back with " - " to preserve dashes in names)
+    let text_part = parts.join(" - ");
+
+    let entity_name: String;
 
     match direction {
         Direction::Outgoing => {
-            let mut text = text_part.trim();
             let prefixes = match event_type {
                 EventType::Damage => vec!["to ", "against "],
                 EventType::Repair => vec![
@@ -298,16 +290,18 @@ fn split_entities_and_weapon(
                 EventType::Neut => vec!["energy neutralized ", "energy drained from ", "energy drained to "],
             };
             
+            let text = text_part.trim();
+            let lower_text = text.to_lowercase();
+            let mut result = text.to_string();
             for prefix in prefixes {
-                if text.to_lowercase().starts_with(&prefix.to_lowercase()) {
-                    text = text[prefix.len()..].trim();
+                if lower_text.starts_with(&prefix.to_lowercase()) {
+                    result = text[prefix.len()..].trim().to_string();
                     break;
                 }
             }
-            entity_name = text;
+            entity_name = result;
         }
         Direction::Incoming => {
-            let mut text = text_part.trim();
             let prefixes = match event_type {
                 EventType::Damage => vec!["from "],
                 EventType::Repair => vec![
@@ -321,13 +315,16 @@ fn split_entities_and_weapon(
                 EventType::Neut => vec!["energy neutralized by ", "energy drained by "],
             };
 
+            let text = text_part.trim();
+            let lower_text = text.to_lowercase();
+            let mut result = text.to_string();
             for prefix in prefixes {
-                if text.to_lowercase().starts_with(&prefix.to_lowercase()) {
-                    text = text[prefix.len()..].trim();
+                if lower_text.starts_with(&prefix.to_lowercase()) {
+                    result = text[prefix.len()..].trim().to_string();
                     break;
                 }
             }
-            entity_name = text;
+            entity_name = result;
         }
     }
 
@@ -470,5 +467,35 @@ mod tests {
         assert_eq!(event.amount, 160.0);
         assert!(event.weapon.contains("Pithi C-Type"));
         assert!(event.target.contains("Felix Allistar"));
+    }
+
+    #[test]
+    fn parses_target_with_dash_in_name() {
+        let mut parser = LineParser::new();
+        let _ = parser.parse_line("Session Started: 2026.01.03 19:20:00", "TestPilot");
+        
+        // Target: "Habitation Module - Breeding Facility" (contains dash)
+        // Weapon: "Small Vorton Projector II"
+        let line = "[ 2026.01.03 19:20:00 ] (combat) <color=0xff00ffff><b>265</b> <color=0x77ffffff><font size=10>to</font> <b><color=0xffffffff>Habitation Module - Breeding Facility</b><font size=10><color=0x77ffffff> - Small Vorton Projector II - Hits";
+        let event = parser.parse_line(line, "TestPilot").expect("should parse target with dash");
+        
+        assert_eq!(event.amount, 265.0);
+        assert_eq!(event.target, "Habitation Module - Breeding Facility");
+        assert_eq!(event.weapon, "Small Vorton Projector II");
+        assert!(!event.incoming);
+    }
+
+    #[test]
+    fn parses_damage_without_quality() {
+        let mut parser = LineParser::new();
+        let _ = parser.parse_line("Session Started: 2026.01.03 19:20:00", "TestPilot");
+        
+        // No quality suffix (user has it disabled in EVE settings)
+        let line = "[ 2026.01.03 19:20:00 ] (combat) <color=0xff00ffff><b>265</b> <color=0x77ffffff><font size=10>to</font> <b><color=0xffffffff>Habitation Module - Breeding Facility</b><font size=10><color=0x77ffffff> - Small Vorton Projector II";
+        let event = parser.parse_line(line, "TestPilot").expect("should parse without quality");
+        
+        assert_eq!(event.amount, 265.0);
+        assert_eq!(event.target, "Habitation Module - Breeding Facility");
+        assert_eq!(event.weapon, "Small Vorton Projector II");
     }
 }
