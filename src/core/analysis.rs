@@ -83,7 +83,8 @@ pub fn compute_dps_series(
         HashMap::new();
     let mut outgoing_by_char_target_damage: HashMap<String, HashMap<EntityName, f32>> =
         HashMap::new();
-    let mut char_actions_map: HashMap<String, HashMap<(String, EventType, bool), f32>> =
+    // Key: (weapon, target, EventType, incoming) - target is "" for incoming events
+    let mut char_actions_map: HashMap<String, HashMap<(String, String, EventType, bool), f32>> =
         HashMap::new();
 
     for (i, sample) in samples.iter_mut().enumerate() {
@@ -113,14 +114,15 @@ pub fn compute_dps_series(
                 *char_actions_map
                     .entry(event.character.clone())
                     .or_default()
-                    .entry((event.weapon.clone(), event.event_type.clone(), true))
+                    .entry((event.weapon.clone(), String::new(), event.event_type.clone(), true))
                     .or_insert(0.0) += event.amount;
             } else {
                 // Outgoing logic
+                // For outgoing, include target in key for per-target breakdown
                 *char_actions_map
                     .entry(event.character.clone())
                     .or_default()
-                    .entry((event.weapon.clone(), event.event_type.clone(), false))
+                    .entry((event.weapon.clone(), event.target.clone(), event.event_type.clone(), false))
                     .or_insert(0.0) += event.amount;
 
                 match event.event_type {
@@ -168,7 +170,8 @@ pub fn compute_dps_series(
 
             // Clean up combat actions map - runs for BOTH incoming and outgoing events
             if let Some(char_actions) = char_actions_map.get_mut(&event.character) {
-                let key = (event.weapon.clone(), event.event_type.clone(), event.incoming);
+                let target_key = if event.incoming { String::new() } else { event.target.clone() };
+                let key = (event.weapon.clone(), target_key, event.event_type.clone(), event.incoming);
                 if let Some(val) = char_actions.get_mut(&key) {
                     *val -= event.amount;
                     if *val <= 0.0 {
@@ -316,18 +319,39 @@ pub fn compute_dps_series(
             })
             .collect();
 
+        // Build combat_actions_by_character, aggregating targets per weapon
         sample.combat_actions_by_character = char_actions_map
             .iter()
             .map(|(character, actions)| {
+                // Group by (weapon, EventType, incoming) and collect targets
+                let mut weapon_groups: HashMap<(String, EventType, bool), (f32, Vec<super::model::TargetHit>)> = HashMap::new();
+                for ((weapon, target, event_type, incoming), value) in actions {
+                    let entry = weapon_groups
+                        .entry((weapon.clone(), event_type.clone(), *incoming))
+                        .or_insert((0.0, Vec::new()));
+                    entry.0 += value;
+                    // Only add target breakdown for outgoing events with non-empty target
+                    if !incoming && !target.is_empty() {
+                        entry.1.push(super::model::TargetHit {
+                            target: target.clone(),
+                            value: value / window_seconds,
+                        });
+                    }
+                }
                 (
                     character.clone(),
-                    actions
-                        .iter()
-                        .map(|((name, action_type, incoming), value)| super::model::CombatAction {
-                            name: name.clone(),
-                            action_type: action_type.clone(),
-                            value: value / window_seconds,
-                            incoming: *incoming,
+                    weapon_groups
+                        .into_iter()
+                        .map(|((name, action_type, incoming), (total, mut targets))| {
+                            // Sort targets by value descending
+                            targets.sort_by(|a, b| b.value.partial_cmp(&a.value).unwrap_or(std::cmp::Ordering::Equal));
+                            super::model::CombatAction {
+                                name,
+                                action_type,
+                                value: total / window_seconds,
+                                incoming,
+                                targets,
+                            }
                         })
                         .collect(),
                 )

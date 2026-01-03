@@ -13,12 +13,22 @@ pub enum EventType {
     Neut,
 }
 
+/// Per-target damage breakdown for a weapon action
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TargetHit {
+    pub target: String,
+    pub value: f32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CombatAction {
     pub name: String,
     pub value: f32,
     pub action_type: EventType,
     pub incoming: bool,
+    /// Per-target breakdown (populated for outgoing Damage events)
+    #[serde(default)]
+    pub targets: Vec<TargetHit>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

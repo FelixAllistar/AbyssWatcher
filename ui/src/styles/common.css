@@ -404,3 +404,63 @@ h1 {
     opacity: 0.5;
     margin-left: 4px;
 }
+
+/* Weapon-to-Target Breakdown */
+.action-row-group {
+    margin-bottom: 2px;
+}
+
+.action-row-expandable {
+    cursor: pointer;
+}
+
+.action-row-expandable:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.collapse-indicator-sm {
+    font-size: 6px;
+    opacity: 0.5;
+    margin-right: 4px;
+}
+
+.action-targets {
+    margin-left: 12px;
+    border-left: 1px solid var(--border-color-dim);
+    padding-left: 8px;
+}
+
+.action-row-sub {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 1px 4px;
+    font-size: 9px;
+    opacity: 0.85;
+}
+
+.action-row-sub:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.target-arrow {
+    opacity: 0.4;
+    font-size: 8px;
+}
+
+.target-name {
+    flex: 1;
+    color: var(--text-dim);
+}
+
+.target-value {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.inline-target {
+    margin-left: 6px;
+    opacity: 0.6;
+    font-size: 9px;
+    color: var(--text-dim);
+}

@@ -1,10 +1,16 @@
 import { type FC, useState, useMemo } from 'react';
 
+interface TargetHit {
+    target: string;
+    value: number;
+}
+
 interface CombatAction {
     name: string;
     action_type: 'Damage' | 'Repair' | 'Capacitor' | 'Neut';
     incoming: boolean;
     value: number;
+    targets: TargetHit[];
 }
 
 interface DpsData {
@@ -85,6 +91,17 @@ const CharacterCard: FC<CharacterCardProps> = ({ name, actions }) => {
         });
     };
 
+    // Track expanded weapons for multi-target display
+    const [expandedWeapons, setExpandedWeapons] = useState<Set<string>>(new Set());
+    const toggleWeapon = (key: string) => {
+        setExpandedWeapons((prev) => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+    };
+
     const renderStatPair = (outVal: number, inVal: number, type: CombatAction['action_type']) => {
         if (outVal <= 0 && inVal <= 0) return null;
         const outStyle = getMetricStyle(type, false);
@@ -139,11 +156,52 @@ const CharacterCard: FC<CharacterCardProps> = ({ name, actions }) => {
                                         {items.map((act, idx) => {
                                             const style = getMetricStyle(act.action_type, act.incoming);
                                             const icon = act.incoming ? '↓' : '↑';
+                                            const hasMultipleTargets = !act.incoming && act.targets && act.targets.length > 1;
+                                            const singleTarget = !act.incoming && act.targets && act.targets.length === 1 ? act.targets[0] : null;
+                                            const weaponKey = `${act.name}-${idx}`;
+                                            const isWeaponExpanded = expandedWeapons.has(weaponKey);
+
+                                            // Multi-target: collapsible dropdown
+                                            if (hasMultipleTargets) {
+                                                return (
+                                                    <div className="action-row-group" key={weaponKey}>
+                                                        <div className="action-row action-row-expandable" onClick={() => toggleWeapon(weaponKey)}>
+                                                            <div className={`action-name ${style.class}`}>
+                                                                <span className="collapse-indicator-sm">{isWeaponExpanded ? '▼' : '▶'}</span>
+                                                                <span className="dir-icon">{icon}</span>
+                                                                <span>{act.name}</span>
+                                                            </div>
+                                                            <div className={`action-value ${style.class}`}>
+                                                                {act.value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}
+                                                                <span className="action-unit">{style.label}</span>
+                                                            </div>
+                                                        </div>
+                                                        {isWeaponExpanded && (
+                                                            <div className="action-targets">
+                                                                {act.targets.map((t, ti) => (
+                                                                    <div className="action-row-sub" key={ti}>
+                                                                        <span className="target-arrow">→</span>
+                                                                        <span className="target-name">{t.target}</span>
+                                                                        <span className={`target-value ${style.class}`}>
+                                                                            {t.value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            }
+
+                                            // Single target: inline display
                                             return (
-                                                <div className="action-row" key={`${act.name}-${idx}`}>
+                                                <div className="action-row" key={weaponKey}>
                                                     <div className={`action-name ${style.class}`}>
                                                         <span className="dir-icon">{icon}</span>
                                                         <span>{act.name}</span>
+                                                        {singleTarget && (
+                                                            <span className="inline-target">→ {singleTarget.target}</span>
+                                                        )}
                                                     </div>
                                                     <div className={`action-value ${style.class}`}>
                                                         {act.value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}
