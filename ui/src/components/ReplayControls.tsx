@@ -1,4 +1,5 @@
 import { type FC } from 'react';
+import type { Bookmark } from '../types';
 
 interface ReplayControlsProps {
     isPlaying: boolean;
@@ -10,7 +11,23 @@ interface ReplayControlsProps {
     onStep: () => void;
     onScrub: (value: number) => void;
     onSpeedChange: (speed: number) => void;
+    /** Bookmarks to display as notches on the timeline */
+    bookmarks?: Bookmark[];
+    /** Session start time in seconds (for calculating notch positions) */
+    sessionStartTime?: number;
 }
+
+/** Get color for bookmark type */
+const getBookmarkColor = (type: string): string => {
+    switch (type) {
+        case 'RunStart': return 'var(--accent-green)';
+        case 'RunEnd': return 'var(--accent-red)';
+        case 'RoomStart': return 'var(--accent-blue)';
+        case 'RoomEnd': return 'var(--accent-blue)';
+        case 'Highlight': return 'var(--accent-yellow, #ffcc00)';
+        default: return 'var(--text-main)';
+    }
+};
 
 const ReplayControls: FC<ReplayControlsProps> = ({
     isPlaying,
@@ -21,8 +38,22 @@ const ReplayControls: FC<ReplayControlsProps> = ({
     onPlayPause,
     onStep,
     onScrub,
-    onSpeedChange
+    onSpeedChange,
+    bookmarks = [],
+    sessionStartTime = 0
 }) => {
+    // Calculate notch positions as percentages
+    const notches = bookmarks.map(b => {
+        const relativeTime = b.timestamp_secs - sessionStartTime;
+        const percent = maxProgress > 0 ? (relativeTime / maxProgress) * 100 : 0;
+        return {
+            type: b.bookmark_type,
+            percent: Math.max(0, Math.min(100, percent)),
+            label: b.label,
+            timestamp: relativeTime
+        };
+    }).filter(n => n.percent >= 0 && n.percent <= 100);
+
     return (
         <div id="replay-controls" style={{
             display: 'flex',
@@ -40,7 +71,12 @@ const ReplayControls: FC<ReplayControlsProps> = ({
                 Next
             </button>
 
-            <div id="timeline-container" style={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
+            <div id="timeline-container" style={{
+                flexGrow: 1,
+                display: 'flex',
+                alignItems: 'center',
+                position: 'relative'
+            }}>
                 <input
                     type="range"
                     min="0"
@@ -49,6 +85,33 @@ const ReplayControls: FC<ReplayControlsProps> = ({
                     onChange={(e) => onScrub(parseInt(e.target.value))}
                     style={{ width: '100%' }}
                 />
+
+                {/* Bookmark Notches */}
+                {notches.map((notch, i) => (
+                    <div
+                        key={i}
+                        className="timeline-notch"
+                        style={{
+                            position: 'absolute',
+                            left: `${notch.percent}%`,
+                            top: '50%',
+                            transform: 'translate(-50%, -50%)',
+                            width: '4px',
+                            height: '16px',
+                            background: getBookmarkColor(notch.type),
+                            borderRadius: '2px',
+                            pointerEvents: 'auto',
+                            cursor: 'pointer',
+                            opacity: 0.9,
+                            zIndex: 10
+                        }}
+                        title={`${notch.type}${notch.label ? ': ' + notch.label : ''} (${Math.floor(notch.timestamp / 60)}:${(notch.timestamp % 60).toString().padStart(2, '0')})`}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onScrub(notch.timestamp);
+                        }}
+                    />
+                ))}
             </div>
 
             <span className="text-sm text-dim" style={{ minWidth: '80px', textAlign: 'center' }}>

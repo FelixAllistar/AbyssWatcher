@@ -45,3 +45,39 @@ export interface Settings {
     gamelog_dir: string;
     dps_window_seconds: number;
 }
+
+// ============================================
+// Bookmark Types (mirror src/core/bookmarks/model.rs)
+// ============================================
+
+/** Type of bookmark */
+export type BookmarkType = 'RunStart' | 'RunEnd' | 'RoomStart' | 'RoomEnd' | 'Highlight';
+
+/** Room marker state */
+export type RoomMarkerState = 'Idle' | 'InRoom';
+
+/** A bookmark from the backend */
+export interface Bookmark {
+    id: number;
+    run_id: number;
+    timestamp_secs: number;
+    bookmark_type: BookmarkType;
+    label?: string;
+}
+
+/** A run from the backend */
+export interface Run {
+    id: number;
+    character: string;
+    character_id: number;
+    start_time_secs: number;
+    end_time_secs?: number;
+    origin_location?: string;
+    bookmarks: Bookmark[];
+}
+
+/** Room marker toggle response */
+export interface RoomMarkerResponse {
+    state: RoomMarkerState;
+    bookmark_id?: number;
+}

@@ -6,7 +6,7 @@ import CombatBreakdown from './CombatBreakdown';
 import ReplayControls from './ReplayControls';
 import LogBrowser from './LogBrowser';
 import RawLogViewer from './RawLogViewer';
-import type { DpsUpdate, CharacterState } from '../types';
+import type { DpsUpdate, CharacterState, Bookmark, Run } from '../types';
 import '../styles/replay.css';
 
 interface ReplayStatus {
@@ -27,6 +27,11 @@ function ReplayWindow() {
 
     // Characters are derived from data for replay
     const [characters, setCharacters] = useState<CharacterState[]>([]);
+
+    // Bookmarks for timeline notches
+    const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+    const [sessionStartTime, setSessionStartTime] = useState(0);
+    const [currentGamelogPath, setCurrentGamelogPath] = useState<string | null>(null);
 
     useEffect(() => {
         const unlistenUpdate = listen<DpsUpdate>('replay-dps-update', (event) => {
@@ -61,6 +66,23 @@ function ReplayWindow() {
             setStatus(p => ({ ...p, duration }));
             setIsPlaying(true);
             setShowLogs(false);
+
+            // Store the first log path for bookmark operations
+            if (logs.length > 0) {
+                setCurrentGamelogPath(logs[0][1]);
+                // Try to load existing bookmarks
+                try {
+                    const bks = await invoke<Bookmark[]>('get_session_bookmarks', { gamelogPath: logs[0][1] });
+                    setBookmarks(bks);
+                    // Estimate session start from first bookmark or use 0
+                    const runStarts = bks.filter(b => b.bookmark_type === 'RunStart');
+                    if (runStarts.length > 0) {
+                        setSessionStartTime(runStarts[0].timestamp_secs);
+                    }
+                } catch {
+                    setBookmarks([]);
+                }
+            }
         } catch (e) {
             console.error(e);
             alert('Error starting replay: ' + e);
@@ -87,11 +109,37 @@ function ReplayWindow() {
         return `${m}:${s.toString().padStart(2, '0')}`;
     };
 
+    const handleDetectFilaments = async () => {
+        if (!currentGamelogPath) {
+            alert('No log loaded. Start a replay first.');
+            return;
+        }
+        try {
+            const runs = await invoke<Run[]>('detect_filaments', { gamelogPath: currentGamelogPath });
+            console.log('Detected runs:', runs);
+            // Flatten bookmarks from all runs
+            const allBookmarks = runs.flatMap(r => r.bookmarks);
+            setBookmarks(prev => [...prev, ...allBookmarks]);
+            alert(`Detected ${runs.length} Abyss run(s)`);
+        } catch (e) {
+            console.error('Detect filaments failed:', e);
+            alert('Detect filaments failed: ' + e);
+        }
+    };
+
     return (
         <div id="app" className="replay-suite" style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
             <div id="header">
                 <h1>Replay Suite</h1>
                 <div className="header-controls">
+                    <button
+                        className="icon-btn"
+                        onClick={handleDetectFilaments}
+                        title="Detect Abyss runs from chat logs"
+                        disabled={!currentGamelogPath}
+                    >
+                        🔍 Detect
+                    </button>
                     <button className="icon-btn" onClick={() => setShowDebug(!showDebug)}>Debug</button>
                     <button className="icon-btn" onClick={() => setShowLogs(!showLogs)}>Logs</button>
                 </div>
@@ -112,6 +160,8 @@ function ReplayWindow() {
                 onStep={() => invoke('step_replay')}
                 onScrub={handleScrub}
                 onSpeedChange={(s) => { invoke('set_replay_speed', { speed: s }); setSpeed(s); }}
+                bookmarks={bookmarks}
+                sessionStartTime={sessionStartTime}
             />
 
             {showLogs && (

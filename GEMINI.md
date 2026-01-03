@@ -25,6 +25,13 @@ AbyssWatcher is a high-performance DPS Meter for EVE Online, built as a modern d
     - `watcher.rs`: Manages multiple `TrackedGamelog` instances.
     - `tracker.rs`: Wraps a single log file with tailer + parser.
     - `replay_engine.rs`: Log replay with merged streams and speed control.
+    - `discovery.rs`: Unified log header extraction for Gamelogs and Chatlogs.
+    - `chatlog/`: Chat log parsing for Abyss run detection.
+      - `parser.rs`: Parses "Channel changed to Local : X" lines.
+      - `watcher.rs`: Tails Local chat logs in real-time.
+    - `bookmarks/`: Bookmark system for marking Abyss runs.
+      - `model.rs`: `BookmarkType`, `Bookmark`, `Run`, `CharacterBookmarks`.
+      - `store.rs`: JSON persistence in app data directory.
 - **Frontend (Web)**:
   - Located in `ui/`.
   - **Stack**: React 18, TypeScript, Vite 7 (configured at root).
