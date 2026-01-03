@@ -47,14 +47,17 @@ AbyssWatcher is a high-performance DPS Meter for EVE Online, built as a modern d
     - `LogBrowser.tsx` & `RawLogViewer.tsx`: Replay file selection and debugging.
     - `WindowFrame.tsx`: Custom window decoration system (TitleBar + Resize Handles).
 
-## Design & UX Principles
+## Design & UX Principles: The "Unified Zero-Container HUD"
 
-Follow these guidelines from `conductor/product-guidelines.md`:
-- **Technical and Precise**: No "fluff". Prioritize data accuracy and "no-nonsense" aesthetics.
-- **Data-Dense and Compact**: Maximize information per pixel. Critical for multiboxers monitoring multiple clients.
-  - **Compaction**: Styles must be optimized to work in a small, compact window (e.g., 420x260). Use tight margins and minimal padding.
-- **Visual-First Status**: Use color (Green=Good/Dealt, Red=Bad/Received) and trends rather than just raw numbers where possible.
-- **Modern Dark Aesthetic**: Avoid harsh "pure black" backgrounds. Use subtle deep-blue/off-black gradients and "Glassmorphism" (transparency + blur + thin highlights) to provide depth.
+AbyssWatcher follows the **Unified Zero-Container HUD** design language, prioritizing raw tactical data over UI "chrome".
+
+- **Unified Zero-Container Aesthetic**: Data readouts must never be trapped in bulky boxes, "badges", or button-like containers. Metrics should float integrated directly into the parent strip (e.g., `char-strip`, `status-bar-strip`) to eliminate visual clutter and focus on "Immediate Cognitive Clarity".
+- **Visual Hierarchy (Directional Dominance)**: Outgoing tactical data (Damage dealt, Repairs given) is the primary focus and MUST be visually dominant—larger and bolder (e.g., 12px/900) than secondary incoming tactical data (e.g., 9px).
+- **HUD-Grade Dividers**: Use minimalist slash dividers (`/`) with low opacity (e.g., 0.15) to separate paired data points. Avoid heavy vertical bars (`|`) or solid borders that create "boxiness".
+- **Technical and Precise**: No "fluff". Prioritize data accuracy and "no-nonsense" professional aesthetics.
+- **Data-Dense and Compact**: Maximize information per pixel. Critical for multiboxers monitoring multiple clients simultaneously.
+  - **Compaction**: Styles must be optimized to work in a small, compact windows (e.g., 420x260). Use tight margins and minimal padding.
+- **Modern Dark Aesthetic**: Use subtle deep-blue/off-black gradients and "Glassmorphism" (transparency + blur + thin highlights) to provide depth without relying on literal "pure black" backgrounds.
 - **Strict Log Validation**: "Truth-in-data". Do not guess or infer missing data. If the log is ambiguous, flag it or ignore it.
 
 ## Tech Stack

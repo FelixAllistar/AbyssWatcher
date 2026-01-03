@@ -252,77 +252,78 @@ h1 {
     font-size: 11px;
 }
 
-.breakdown-char-card {
-    margin-bottom: 4px;
-    padding: 6px;
-    background: var(--bg-panel);
-    border: 1px solid var(--border-color);
-    border-top: 1px solid var(--glass-border);
-    border-radius: 6px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+/* Character Tactical Strips */
+.char-strip-container {
+    margin-bottom: 2px;
 }
 
-.empty-state {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 32px;
-    margin-top: 20px;
-    background: var(--bg-panel);
-    border-radius: 6px;
-    border: 1px dashed var(--border-color);
-}
-
-.breakdown-header {
+.char-strip {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding-bottom: 6px;
+    padding: 6px 16px 6px 10px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color-dim);
+    border-radius: 4px;
     cursor: pointer;
-    user-select: none;
+    transition: background 0.15s, border-color 0.15s;
 }
 
-.breakdown-header:hover .char-name {
-    color: var(--color-dps-out);
+.char-strip:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--border-color);
 }
 
-/* Ensure child elements don't block clicks */
-.breakdown-header>* {
-    pointer-events: none;
-}
-
-.breakdown-header {
-    pointer-events: auto;
+.char-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .char-name {
-    font-weight: 700;
-    font-size: 12px;
+    font-weight: 800;
+    font-size: 11px;
     color: var(--text-main);
+    letter-spacing: 0.2px;
 }
 
-.badge-container {
+.metric-container {
     display: flex;
-    gap: 4px;
-    flex-wrap: wrap;
-    justify-content: flex-end;
+    gap: 12px;
+    align-items: center;
 }
 
-.badge {
+.metric-pair {
+    display: flex;
+    align-items: baseline;
+    gap: 3px;
+    font-variant-numeric: tabular-nums;
+    padding: 0 4px;
+}
+
+.metric-pair .val-out {
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.metric-pair .val-in {
+    font-size: 9px;
+    font-weight: 700;
+    opacity: 0.7;
+}
+
+.metric-pair .val-divider {
+    font-size: 9px;
+    opacity: 0.15;
+    margin: 0 -1px;
+}
+
+.metric-idle {
     font-size: 9px;
     font-weight: 800;
-    padding: 1px 6px;
-    border-radius: 4px;
-    background: var(--bg-panel);
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    border: 1px solid var(--glass-border);
-}
-
-.badge-sep {
-    opacity: 0.3;
-    font-weight: 400;
+    color: var(--text-muted);
+    opacity: 0.4;
+    letter-spacing: 1px;
 }
 
 .action-row {

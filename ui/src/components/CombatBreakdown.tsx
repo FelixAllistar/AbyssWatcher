@@ -85,38 +85,39 @@ const CharacterCard: FC<CharacterCardProps> = ({ name, actions }) => {
         });
     };
 
-    const renderBadge = (outVal: number, inVal: number, type: CombatAction['action_type']) => {
+    const renderStatPair = (outVal: number, inVal: number, type: CombatAction['action_type']) => {
         if (outVal <= 0 && inVal <= 0) return null;
         const outStyle = getMetricStyle(type, false);
         const inStyle = getMetricStyle(type, true);
         return (
-            <div className="badge" key={type}>
-                <span className={outVal > 0 ? outStyle.class : 'text-dim'} style={outVal <= 0 ? { opacity: 0.4 } : {}}>
-                    ↗ {outVal.toFixed(0)}
+            <div className="metric-pair" key={type}>
+                <span className={`val-out ${outVal > 0 ? outStyle.class : 'text-dim'}`} style={outVal <= 0 ? { opacity: 0.3 } : {}}>
+                    {outVal.toFixed(0)}
                 </span>
-                <span className="badge-sep">|</span>
-                <span className={inVal > 0 ? inStyle.class : 'text-dim'} style={inVal <= 0 ? { opacity: 0.4 } : {}}>
-                    {inVal.toFixed(0)} ↙
+                <span className="val-divider">/</span>
+                <span className={`val-in ${inVal > 0 ? inStyle.class : 'text-dim'}`} style={inVal <= 0 ? { opacity: 0.3 } : {}}>
+                    {inVal.toFixed(0)}
                 </span>
             </div>
         );
     };
 
-    const badges = [
-        renderBadge(stats.out.dps, stats.in.dps, 'Damage'),
-        renderBadge(stats.out.hps, stats.in.hps, 'Repair'),
-        renderBadge(stats.out.cap, stats.in.cap, 'Capacitor'),
-        renderBadge(stats.out.neut, stats.in.neut, 'Neut'),
+    const metricPairs = [
+        renderStatPair(stats.out.dps, stats.in.dps, 'Damage'),
+        renderStatPair(stats.out.hps, stats.in.hps, 'Repair'),
+        renderStatPair(stats.out.cap, stats.in.cap, 'Capacitor'),
+        renderStatPair(stats.out.neut, stats.in.neut, 'Neut'),
     ].filter(Boolean);
 
     return (
-        <div className="breakdown-char-card">
-            <div className="breakdown-header" onClick={() => setIsCollapsed(!isCollapsed)}>
-                <span className="char-name">
-                    {name} <span className="collapse-indicator">{isCollapsed ? '▶' : '▼'}</span>
-                </span>
-                <div className="badge-container">
-                    {badges.length > 0 ? badges : <span className="badge text-dim" style={{ opacity: 0.4 }}>IDLE</span>}
+        <div className="char-strip-container">
+            <div className="char-strip" onClick={() => setIsCollapsed(!isCollapsed)}>
+                <div className="char-info">
+                    <span className="collapse-indicator">{isCollapsed ? '▶' : '▼'}</span>
+                    <span className="char-name">{name}</span>
+                </div>
+                <div className="metric-container">
+                    {metricPairs.length > 0 ? metricPairs : <span className="metric-idle">IDLE</span>}
                 </div>
             </div>
 
@@ -137,15 +138,15 @@ const CharacterCard: FC<CharacterCardProps> = ({ name, actions }) => {
                                     <div className="category-content">
                                         {items.map((act, idx) => {
                                             const style = getMetricStyle(act.action_type, act.incoming);
-                                            const icon = act.incoming ? '↙' : '↗';
+                                            const icon = act.incoming ? '↓' : '↑';
                                             return (
                                                 <div className="action-row" key={`${act.name}-${idx}`}>
                                                     <div className={`action-name ${style.class}`}>
-                                                        <span>{icon}</span>
+                                                        <span className="dir-icon">{icon}</span>
                                                         <span>{act.name}</span>
                                                     </div>
                                                     <div className={`action-value ${style.class}`}>
-                                                        {act.value.toFixed(1)}
+                                                        {act.value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}
                                                         <span className="action-unit">{style.label}</span>
                                                     </div>
                                                 </div>
