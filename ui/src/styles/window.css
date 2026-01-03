@@ -170,7 +170,7 @@
 /* App Content Wrapper */
 .window-content {
     flex-grow: 1;
-    overflow: hidden;
+    overflow: auto;
     position: relative;
     display: flex;
     flex-direction: column;

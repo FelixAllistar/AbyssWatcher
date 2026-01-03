@@ -23,9 +23,23 @@
   margin-bottom: 8px;
 }
 
-/* Margin-top combat breakdown handled in common if generic, or here */
+/* Data container: flex child that holds StatusBar + CombatBreakdown */
+#data-container {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  min-height: 0;
+  /* Critical for nested flex scroll */
+  overflow: hidden;
+  /* Children handle their own scrolls */
+}
+
+/* Combat Breakdown: scrollable character list */
 #combat-breakdown {
   margin-top: 10px;
+  flex-grow: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 /* Settings Modal */

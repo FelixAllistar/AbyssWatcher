@@ -257,6 +257,14 @@ h1 {
     margin-bottom: 2px;
 }
 
+/* Expanded character content: scrollable inner region */
+.char-content {
+    max-height: 180px;
+    overflow-y: auto;
+    padding-left: 12px;
+    padding-bottom: 4px;
+}
+
 .char-strip {
     display: flex;
     justify-content: space-between;
