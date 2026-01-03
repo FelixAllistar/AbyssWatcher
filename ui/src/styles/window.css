@@ -1,0 +1,177 @@
+/* Window Frame Container */
+.window-frame {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+    position: relative;
+    background: transparent;
+    /* Let app background handle it */
+    overflow: hidden;
+}
+
+/* Custom Title Bar */
+.title-bar {
+    height: 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border-color);
+    padding: 0 10px;
+    user-select: none;
+    flex-shrink: 0;
+    transition: background 0.2s;
+}
+
+.title-bar:hover {
+    background: var(--bg-panel-hover);
+}
+
+.title-drag-region {
+    flex-grow: 1;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    /* Use tauri drag region attribute instead of explicit CSS where possible, 
+       but for web preview we want cursor defaults */
+    cursor: default;
+}
+
+.title-text {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    margin-right: 12px;
+    pointer-events: none;
+    /* Let clicks pass to drag region */
+}
+
+.window-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    /* Ensure controls are clickable */
+    -webkit-app-region: no-drag;
+}
+
+.window-controls button {
+    -webkit-app-region: no-drag;
+}
+
+/* Main Header Controls (embedded in titlebar) */
+.header-actions {
+    display: flex;
+    gap: 6px;
+    margin-right: 12px;
+    -webkit-app-region: no-drag;
+}
+
+/* System Window Buttons (Close/Max/Min) */
+.sys-btn {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.sys-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-main);
+}
+
+.sys-btn.close:hover {
+    background: #ef4444;
+    color: white;
+}
+
+
+/* Resize Handles */
+.resize-handle {
+    position: absolute;
+    z-index: 9999;
+}
+
+/* Edges */
+.resize-handle.top {
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 5px;
+    cursor: ns-resize;
+}
+
+.resize-handle.bottom {
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 5px;
+    cursor: ns-resize;
+}
+
+.resize-handle.left {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 5px;
+    cursor: ew-resize;
+}
+
+.resize-handle.right {
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: 5px;
+    cursor: ew-resize;
+}
+
+/* Corners */
+.resize-handle.top-left {
+    top: 0;
+    left: 0;
+    width: 10px;
+    height: 10px;
+    cursor: nwse-resize;
+}
+
+.resize-handle.top-right {
+    top: 0;
+    right: 0;
+    width: 10px;
+    height: 10px;
+    cursor: nesw-resize;
+}
+
+.resize-handle.bottom-left {
+    bottom: 0;
+    left: 0;
+    width: 10px;
+    height: 10px;
+    cursor: nesw-resize;
+}
+
+.resize-handle.bottom-right {
+    bottom: 0;
+    right: 0;
+    width: 10px;
+    height: 10px;
+    cursor: nwse-resize;
+}
+
+/* App Content Wrapper */
+.window-content {
+    flex-grow: 1;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}

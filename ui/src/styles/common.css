@@ -21,6 +21,18 @@ body {
 #root {
     height: 100%;
     width: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Header Controls Overlay */
+.header-controls-overlay {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 200;
+    display: flex;
+    gap: 4px;
 }
 
 h1 {
@@ -242,8 +254,8 @@ h1 {
 }
 
 .breakdown-char-card {
-    margin-bottom: 12px;
-    padding: 8px;
+    margin-bottom: 4px;
+    padding: 6px;
     background: var(--bg-panel);
     border: 1px solid var(--border-color);
     border-top: 1px solid var(--glass-border);

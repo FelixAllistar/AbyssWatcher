@@ -42,6 +42,8 @@ interface Settings {
   dps_window_seconds: number;
 }
 
+import WindowFrame from './components/WindowFrame';
+
 function MainApp() {
   const [dpsData, setDpsData] = useState<DpsUpdate | null>(null);
   const [characters, setCharacters] = useState<CharacterState[]>([]);
@@ -107,56 +109,58 @@ function MainApp() {
     }
   };
 
+  // Define controls to pass to the WindowFrame
+  const headerControls = (
+    <>
+      <button
+        className="icon-btn"
+        onClick={() => {
+          setShowCharacterSelector(!showCharacterSelector);
+          setShowSettings(false);
+        }}
+      >
+        Chars
+      </button>
+      <button
+        className="icon-btn"
+        onClick={() => {
+          setShowSettings(!showSettings);
+          setShowCharacterSelector(false);
+        }}
+      >
+        ⚙
+      </button>
+    </>
+  );
+
   return (
-    <div id="app">
-      <div id="header">
-        <div></div>
-        <div className="header-controls">
-          <button
-            className="icon-btn"
-            onClick={() => {
-              setShowCharacterSelector(!showCharacterSelector);
-              setShowSettings(false);
-            }}
-          >
-            Chars
-          </button>
-          <button
-            className="icon-btn"
-            onClick={() => {
-              setShowSettings(!showSettings);
-              setShowCharacterSelector(false);
-            }}
-          >
-            ⚙
-          </button>
+    <WindowFrame variant="main" headerActions={headerControls}>
+      <div id="app">
+        {showSettings && (
+          <SettingsModal
+            settings={settings}
+            onSave={handleSaveSettings}
+            onCancel={() => setShowSettings(false)}
+            onOpenReplay={handleOpenReplay}
+          />
+        )}
+
+        {showCharacterSelector && (
+          <CharacterSelector
+            characters={characters}
+            onToggle={handleToggleTracking}
+          />
+        )}
+
+        <div id="data-container">
+          <StatusBar data={dpsData} />
+          <CombatBreakdown
+            data={dpsData}
+            characters={characters}
+          />
         </div>
       </div>
-
-      {showSettings && (
-        <SettingsModal
-          settings={settings}
-          onSave={handleSaveSettings}
-          onCancel={() => setShowSettings(false)}
-          onOpenReplay={handleOpenReplay}
-        />
-      )}
-
-      {showCharacterSelector && (
-        <CharacterSelector
-          characters={characters}
-          onToggle={handleToggleTracking}
-        />
-      )}
-
-      <div id="data-container">
-        <StatusBar data={dpsData} />
-        <CombatBreakdown
-          data={dpsData}
-          characters={characters}
-        />
-      </div>
-    </div>
+    </WindowFrame>
   );
 }
 
@@ -172,7 +176,12 @@ function App() {
     }
   }, []);
 
-  if (isReplay) return <ReplayWindow />;
+  if (isReplay) return (
+    <WindowFrame variant="replay" title="Replay Suite">
+      <ReplayWindow />
+    </WindowFrame>
+  );
+
   return <MainApp />;
 }
 
