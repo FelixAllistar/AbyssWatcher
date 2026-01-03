@@ -1,4 +1,4 @@
-import { FC, useState, useMemo } from 'react';
+import { type FC, useState, useMemo } from 'react';
 
 interface CombatAction {
     name: string;

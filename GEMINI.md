@@ -26,17 +26,22 @@ AbyssWatcher is a high-performance DPS Meter for EVE Online, built as a modern d
     - `replay_engine.rs`: Log replay with merged streams and speed control.
 - **Frontend (Web)**:
   - Located in `ui/`.
-  - Built with HTML5, CSS3, and JavaScript (Vanilla or Framework-light).
-  - Communicates with Rust via Tauri Commands (`invoke`) and Events (`emit`).
-  - **Windows**:
-    - **Live Overlay** (`index.html`): The main transparent DPS tracking window.
-    - **Replay Suite** (`replay.html`): The log replay and analysis window.
-  - **Styling** (`ui/styles/`):
-    - `theme.css`: Single source of truth for all CSS variables (colors, fonts). Edit this for theming.
-    - `common.css`: Shared component styles (`.icon-btn`, `.dps-box`, `.value`, utility classes like `.text-dps-out`).
-    - `main.css`: Imports theme/common + Live Overlay-specific layout (settings modal, character selection).
-    - `replay.css`: Imports theme/common + Replay Suite-specific layout (timeline, controls).
-  - **Components** (`ui/components.js`): Shared JS for rendering character lists and DPS updates. Uses CSS classes (e.g., `.text-action-damage`) instead of hardcoded colors.
+  - **Stack**: React 18, TypeScript, Vite 6.
+  - **State Management**: React Hooks (`useState`, `useEffect`) avoiding full DOM repaints.
+  - **Communication**: Communicates with Rust via `@tauri-apps/api` (Commands & Events).
+  - **Entry Point**: `ui/src/main.tsx` → `ui/src/App.tsx`
+  - **Routing**: `App.tsx` automatically detects the window label (`main` or `replay`) to render:
+    - **Live Overlay** (`MainApp`): The transparent DPS tracking HUD.
+    - **Replay Suite** (`ReplayWindow`): The log replay, analysis, and timeline tool.
+  - **Styling** (`ui/src/styles/`):
+    - `theme.css`: Single source of truth for variables (colors, fonts).
+    - `common.css`: Shared utilities and base styles.
+    - `main.css`: Layout-specific styles for the overlay.
+  - **Components** (`ui/src/components/`):
+    - `StatusBar.tsx`: Top summary metrics (DPS, REP, CAP, NEUT).
+    - `CombatBreakdown.tsx`: Collapsible character list with `CharacterCard`.
+    - `ReplayControls.tsx`: Timeline slider and playback controls.
+    - `LogBrowser.tsx` & `RawLogViewer.tsx`: Replay file selection and debugging.
 
 ## Design & UX Principles
 
@@ -50,7 +55,7 @@ Follow these guidelines from `conductor/product-guidelines.md`:
 
 - **Core**: Rust (2021 Edition) for performance and safety.
 - **Framework**: Tauri (v2) for the application shell and system integration.
-- **Frontend**: HTML/CSS/JS.
+- **Frontend**: React 18, TypeScript, Vite.
 - **Async Runtime**: `tokio` for non-blocking I/O (log watching).
 - **Serialization**: `serde` / `serde_json`.
 - **Time**: `chrono` for EVE log timestamp parsing.

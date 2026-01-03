@@ -1,4 +1,4 @@
-import { FC, useEffect, useState } from 'react';
+import { type FC, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 
 interface LogFile {
@@ -110,7 +110,7 @@ const LogBrowser: FC<LogBrowserProps> = ({ onClose, onStartReplay }) => {
                 {Object.entries(charLogs).sort().map(([char, logs]) => (
                     <div key={char} style={{ marginBottom: '10px' }}>
                         <div className="text-dps-out" style={{ fontWeight: 'bold', fontSize: '12px', marginBottom: '4px' }}>{char}</div>
-                        {logs.slice(0, 10).map((log, i) => (
+                        {logs.slice(0, 10).map((log) => (
                             <div key={log.path} style={{ display: 'flex', fontSize: '10px', alignItems: 'center' }}>
                                 <input
                                     type="checkbox"
