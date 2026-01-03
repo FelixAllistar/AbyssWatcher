@@ -1,12 +1,20 @@
 use std::collections::{HashSet, HashMap};
 use std::path::PathBuf;
 use std::sync::{Mutex, Arc, RwLock};
-use std::sync::atomic::{AtomicU64, AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tauri::{Emitter, Manager, State, WebviewWindowBuilder, WebviewUrl};
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::mpsc;
-use crate::core::{log_io, coordinator, config::{ConfigManager, Settings}, replay_engine, state::EngineState};
+use crate::core::{
+    log_io, coordinator, 
+    config::{ConfigManager, Settings}, 
+    replay_engine, 
+    state::EngineState,
+    bookmarks::{model::{BookmarkType, RoomMarkerState, Run, Bookmark}, store::BookmarkStore},
+    chatlog::parser::{ChatlogParser, detect_abyss_runs},
+    discovery,
+};
 
 static REPLAY_SESSION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -28,6 +36,7 @@ struct AppState {
     config_manager: ConfigManager,
     loop_tx: mpsc::Sender<LoopCommand>,
     replay: Arc<RwLock<Option<ReplaySession>>>,
+    bookmark_store: Mutex<BookmarkStore>,
 }
 
 #[tauri::command]
@@ -282,9 +291,266 @@ fn toggle_tracking(path: PathBuf, state: State<'_, AppState>) {
     }
 }
 
+// ============================================
+// Bookmark Commands
+// ============================================
+
+/// Response for room marker toggle
+#[derive(serde::Serialize)]
+struct RoomMarkerResponse {
+    state: RoomMarkerState,
+    bookmark_id: Option<u64>,
+}
+
+/// Serializable bookmark for frontend
+#[derive(serde::Serialize)]
+struct BookmarkResponse {
+    id: u64,
+    run_id: u64,
+    timestamp_secs: u64,
+    bookmark_type: String,
+    label: Option<String>,
+}
+
+impl From<&Bookmark> for BookmarkResponse {
+    fn from(b: &Bookmark) -> Self {
+        Self {
+            id: b.id,
+            run_id: b.run_id,
+            timestamp_secs: b.timestamp.as_secs(),
+            bookmark_type: format!("{:?}", b.bookmark_type),
+            label: b.label.clone(),
+        }
+    }
+}
+
+/// Serializable run for frontend
+#[derive(serde::Serialize)]
+struct RunResponse {
+    id: u64,
+    character: String,
+    character_id: u64,
+    start_time_secs: u64,
+    end_time_secs: Option<u64>,
+    origin_location: Option<String>,
+    bookmarks: Vec<BookmarkResponse>,
+}
+
+impl From<&Run> for RunResponse {
+    fn from(r: &Run) -> Self {
+        Self {
+            id: r.id,
+            character: r.character.clone(),
+            character_id: r.character_id,
+            start_time_secs: r.start_time.as_secs(),
+            end_time_secs: r.end_time.map(|d| d.as_secs()),
+            origin_location: r.origin_location.clone(),
+            bookmarks: r.bookmarks.iter().map(BookmarkResponse::from).collect(),
+        }
+    }
+}
+
+#[tauri::command]
+async fn create_highlight_bookmark(
+    character_id: u64,
+    character_name: String,
+    gamelog_path: PathBuf,
+    label: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<u64, String> {
+    let mut store = state.bookmark_store.lock().unwrap();
+    let bookmarks = store.get_mut(character_id, &character_name)
+        .map_err(|e| e.to_string())?;
+    
+    // Get or create active run
+    let run = if let Some(run) = bookmarks.active_run_mut() {
+        run
+    } else {
+        let run_id = bookmarks.start_run(
+            gamelog_path,
+            None,
+            Duration::from_secs(std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()),
+            None,
+        );
+        bookmarks.run_mut(run_id).unwrap()
+    };
+    
+    let timestamp = Duration::from_secs(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+    );
+    
+    let bookmark_id = run.add_bookmark(BookmarkType::Highlight, timestamp, label);
+    
+    // Save to disk
+    store.save(character_id).map_err(|e| e.to_string())?;
+    
+    Ok(bookmark_id)
+}
+
+#[tauri::command]
+async fn toggle_room_marker(
+    character_id: u64,
+    character_name: String,
+    gamelog_path: PathBuf,
+    state: State<'_, AppState>,
+) -> Result<RoomMarkerResponse, String> {
+    let mut store = state.bookmark_store.lock().unwrap();
+    let bookmarks = store.get_mut(character_id, &character_name)
+        .map_err(|e| e.to_string())?;
+    
+    // Get or create active run
+    let run = if let Some(run) = bookmarks.active_run_mut() {
+        run
+    } else {
+        let run_id = bookmarks.start_run(
+            gamelog_path,
+            None,
+            Duration::from_secs(std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()),
+            None,
+        );
+        bookmarks.run_mut(run_id).unwrap()
+    };
+    
+    let timestamp = Duration::from_secs(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+    );
+    
+    let (new_state, bookmark_id) = run.toggle_room_marker(timestamp);
+    
+    // Save to disk
+    store.save(character_id).map_err(|e| e.to_string())?;
+    
+    Ok(RoomMarkerResponse {
+        state: new_state,
+        bookmark_id,
+    })
+}
+
+#[tauri::command]
+async fn detect_filaments(
+    gamelog_path: PathBuf,
+    state: State<'_, AppState>,
+) -> Result<Vec<RunResponse>, String> {
+    // Derive chatlog directory from gamelog path
+    let gamelog_dir = gamelog_path.parent()
+        .ok_or_else(|| "Invalid gamelog path".to_string())?;
+    let chatlog_dir = discovery::derive_chatlog_dir(gamelog_dir);
+    
+    if !chatlog_dir.exists() {
+        return Err(format!("Chatlog directory not found: {:?}", chatlog_dir));
+    }
+    
+    // Get character info from gamelog header
+    let header = discovery::extract_header(&gamelog_path, discovery::LogType::Gamelog)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Could not read gamelog header".to_string())?;
+    
+    let character_name = header.character.clone();
+    let character_id = header.character_id.unwrap_or(0);
+    
+    // Find corresponding Local chatlog
+    let chatlog_path = discovery::find_local_chatlog_by_name(&chatlog_dir, &character_name)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("No Local chatlog found for {}", character_name))?;
+    
+    // Read and parse chatlog
+    let lines = log_io::read_full_lines(&chatlog_path)
+        .map_err(|e| e.to_string())?;
+    
+    let parser = ChatlogParser::new();
+    let changes = parser.parse_lines(&lines);
+    let abyss_runs = detect_abyss_runs(&changes);
+    
+    // Store the detected runs
+    let mut store = state.bookmark_store.lock().unwrap();
+    let bookmarks = store.get_mut(character_id, &character_name)
+        .map_err(|e| e.to_string())?;
+    
+    let mut responses = Vec::new();
+    
+    for abyss_run in &abyss_runs {
+        // Check if we already have a run with this start time
+        let existing = bookmarks.runs.iter().any(|r| r.start_time == abyss_run.entry_time);
+        if existing {
+            continue;
+        }
+        
+        let run_id = bookmarks.start_run(
+            gamelog_path.clone(),
+            Some(chatlog_path.clone()),
+            abyss_run.entry_time,
+            abyss_run.origin_location.clone(),
+        );
+        
+        if let Some(run) = bookmarks.run_mut(run_id) {
+            // Add RunStart bookmark
+            run.add_bookmark(BookmarkType::RunStart, abyss_run.entry_time, None);
+            
+            // End the run if we have an exit time
+            if let Some(exit_time) = abyss_run.exit_time {
+                run.add_bookmark(BookmarkType::RunEnd, exit_time, None);
+                run.end(exit_time);
+            }
+            
+            responses.push(RunResponse::from(&*run));
+        }
+    }
+    
+    // Save
+    store.save(character_id).map_err(|e| e.to_string())?;
+    
+    Ok(responses)
+}
+
+#[tauri::command]
+async fn get_session_bookmarks(
+    gamelog_path: PathBuf,
+    state: State<'_, AppState>,
+) -> Result<Vec<BookmarkResponse>, String> {
+    // Get character info from gamelog header
+    let header = discovery::extract_header(&gamelog_path, discovery::LogType::Gamelog)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Could not read gamelog header".to_string())?;
+    
+    let character_id = header.character_id.unwrap_or(0);
+    
+    let store = state.bookmark_store.lock().unwrap();
+    let bookmarks = match store.get(character_id) {
+        Some(b) => b,
+        None => return Ok(Vec::new()),
+    };
+    
+    // Find runs that match this gamelog path
+    let matching_runs: Vec<_> = bookmarks.runs.iter()
+        .filter(|r| r.gamelog_path == gamelog_path)
+        .collect();
+    
+    let mut all_bookmarks = Vec::new();
+    for run in matching_runs {
+        for bookmark in &run.bookmarks {
+            all_bookmarks.push(BookmarkResponse::from(bookmark));
+        }
+    }
+    
+    // Sort by timestamp
+    all_bookmarks.sort_by_key(|b| b.timestamp_secs);
+    
+    Ok(all_bookmarks)
+}
 
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
@@ -309,12 +575,17 @@ pub fn run() {
             // Create a channel for communicating with the background loop
             let (tx, mut rx) = mpsc::channel(32);
 
+            // Initialize bookmark store with data directory
+            let data_dir = app.path().app_data_dir().unwrap_or(PathBuf::from("."));
+            let bookmark_store = BookmarkStore::new(data_dir);
+
             app.manage(AppState {
                 tracked_paths: Mutex::new(HashSet::new()),
                 settings: Mutex::new(settings),
                 config_manager,
                 loop_tx: tx,
                 replay: Arc::new(RwLock::new(None)),
+                bookmark_store: Mutex::new(bookmark_store),
             });
 
             if cfg!(debug_assertions) {
@@ -386,7 +657,12 @@ pub fn run() {
             toggle_replay_pause,
             set_replay_speed,
             seek_replay,
-            step_replay
+            step_replay,
+            // Bookmark commands
+            create_highlight_bookmark,
+            toggle_room_marker,
+            detect_filaments,
+            get_session_bookmarks
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
