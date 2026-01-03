@@ -135,7 +135,7 @@ function MainApp() {
 
   return (
     <WindowFrame variant="main" headerActions={headerControls}>
-      <div id="app">
+      <div id="app" className="main-overlay">
         {showSettings && (
           <SettingsModal
             settings={settings}
@@ -176,11 +176,7 @@ function App() {
     }
   }, []);
 
-  if (isReplay) return (
-    <WindowFrame variant="replay" title="Replay Suite">
-      <ReplayWindow />
-    </WindowFrame>
-  );
+  if (isReplay) return <ReplayWindow />;
 
   return <MainApp />;
 }

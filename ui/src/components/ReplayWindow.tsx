@@ -7,6 +7,7 @@ import ReplayControls from './ReplayControls';
 import LogBrowser from './LogBrowser';
 import RawLogViewer from './RawLogViewer';
 import type { DpsUpdate, CharacterState } from '../App';
+import '../styles/replay.css';
 
 interface ReplayStatus {
     current_time: number;
@@ -87,7 +88,7 @@ function ReplayWindow() {
     };
 
     return (
-        <div id="app" style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <div id="app" className="replay-suite" style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
             <div id="header">
                 <h1>Replay Suite</h1>
                 <div className="header-controls">

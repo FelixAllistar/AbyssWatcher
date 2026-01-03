@@ -14,11 +14,12 @@ body {
     height: 100vh;
 }
 
-#app {
+#app.replay-suite {
     display: flex;
     flex-direction: column;
     flex-grow: 1;
-    background-color: var(--bg-color-replay);
+    background: var(--bg-color-replay);
+    /* use background for gradients */
     padding: 10px;
     overflow: hidden;
 }
@@ -29,7 +30,15 @@ body {
     align-items: center;
     padding-bottom: 8px;
     border-bottom: 1px solid var(--border-color);
-    margin-bottom: 8px;
+    margin-bottom: 12px;
+}
+
+#header h1 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-main);
+    letter-spacing: 0.5px;
+    margin: 0;
 }
 
 #session-panel {

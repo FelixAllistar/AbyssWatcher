@@ -37,18 +37,22 @@ AbyssWatcher is a high-performance DPS Meter for EVE Online, built as a modern d
     - `theme.css`: Single source of truth for variables (colors, fonts).
     - `common.css`: Shared utilities and base styles.
     - `main.css`: Layout-specific styles for the overlay.
+    - `window.css`: Custom window frame and resize handle styles.
   - **Components** (`ui/src/components/`):
     - `StatusBar.tsx`: Top summary metrics (DPS, REP, CAP, NEUT).
     - `CombatBreakdown.tsx`: Collapsible character list with `CharacterCard`.
     - `ReplayControls.tsx`: Timeline slider and playback controls.
     - `LogBrowser.tsx` & `RawLogViewer.tsx`: Replay file selection and debugging.
+    - `WindowFrame.tsx`: Custom window decoration system (TitleBar + Resize Handles).
 
 ## Design & UX Principles
 
 Follow these guidelines from `conductor/product-guidelines.md`:
 - **Technical and Precise**: No "fluff". Prioritize data accuracy and "no-nonsense" aesthetics.
 - **Data-Dense and Compact**: Maximize information per pixel. Critical for multiboxers monitoring multiple clients.
+  - **Compaction**: Styles must be optimized to work in a small, compact window (e.g., 420x260). Use tight margins and minimal padding.
 - **Visual-First Status**: Use color (Green=Good/Dealt, Red=Bad/Received) and trends rather than just raw numbers where possible.
+- **Modern Dark Aesthetic**: Avoid harsh "pure black" backgrounds. Use subtle deep-blue/off-black gradients and "Glassmorphism" (transparency + blur + thin highlights) to provide depth.
 - **Strict Log Validation**: "Truth-in-data". Do not guess or infer missing data. If the log is ambiguous, flag it or ignore it.
 
 ## Tech Stack
@@ -100,3 +104,10 @@ Follow these guidelines from `conductor/product-guidelines.md`:
 - **Fix**: Force the application to use XWayland (X11 compatibility mode) by setting `GDK_BACKEND=x11`. This is enforced in:
   - `abyss-watcher.desktop`: `Exec=env GDK_BACKEND=x11 ...`
   - Dev environment: `.cargo/config.toml` sets `[env] GDK_BACKEND = "x11"`
+
+### 4. Custom Window Decorations
+- **Configuration**: Native OS decorations are disabled (`decorations: false` in `tauri.conf.json`).
+- **Implementation**: Managed by `WindowFrame.tsx` component.
+  - **Dragging**: Uses manual `appWindow.startDragging()` on the custom title bar to ensure reliability across Linux distros.
+  - **Resizing**: Implements 8 invisible edge/corner handles that call `appWindow.startResizeDragging()`.
+  - **Compacted Header**: Controls (Chars, Settings) are integrated directly into the title bar to save vertical space.

@@ -1,7 +1,7 @@
 @import 'theme.css';
 @import 'common.css';
 
-#app {
+#app.main-overlay {
   display: flex;
   flex-direction: column;
   height: 100%;
