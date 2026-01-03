@@ -98,7 +98,7 @@ function ReplayWindow() {
             </div>
 
             <div id="data-container" style={{ flexGrow: 1, overflowY: 'auto' }}>
-                <StatusBar data={dpsData} />
+                <StatusBar combatActions={dpsData?.combat_actions_by_character ?? null} />
                 <CombatBreakdown data={dpsData} characters={characters} />
             </div>
 

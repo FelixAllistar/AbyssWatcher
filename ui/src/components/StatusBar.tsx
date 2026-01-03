@@ -1,18 +1,14 @@
-import { type FC } from 'react';
+import { type FC, useMemo } from 'react';
 
-interface DpsData {
-    outgoing_dps: number;
-    incoming_dps: number;
-    outgoing_hps: number;
-    incoming_hps: number;
-    outgoing_cap: number;
-    incoming_cap: number;
-    outgoing_neut: number;
-    incoming_neut: number;
+interface CombatAction {
+    name: string;
+    action_type: 'Damage' | 'Repair' | 'Capacitor' | 'Neut';
+    incoming: boolean;
+    value: number;
 }
 
 interface StatusBarProps {
-    data: DpsData | null;
+    combatActions: Record<string, CombatAction[]> | null;
 }
 
 interface StatPairProps {
@@ -38,48 +34,63 @@ const StatItem: FC<StatPairProps> = ({ label, outValue, inValue, outClass, inCla
     </div>
 );
 
-const StatusBar: FC<StatusBarProps> = ({ data }) => {
-    const d = data || {
-        outgoing_dps: 0,
-        incoming_dps: 0,
-        outgoing_hps: 0,
-        incoming_hps: 0,
-        outgoing_cap: 0,
-        incoming_cap: 0,
-        outgoing_neut: 0,
-        incoming_neut: 0,
-    };
+/**
+ * StatusBar computes its totals by summing all character combat actions.
+ * This ensures the top-line totals are always exactly the sum of character breakdowns.
+ */
+const StatusBar: FC<StatusBarProps> = ({ combatActions }) => {
+    const totals = useMemo(() => {
+        const result = {
+            out: { dps: 0, hps: 0, cap: 0, neut: 0 },
+            in: { dps: 0, hps: 0, cap: 0, neut: 0 },
+        };
+
+        if (!combatActions) return result;
+
+        // Sum all actions across all characters
+        Object.values(combatActions).forEach((actions) => {
+            actions.forEach((act) => {
+                const dir = act.incoming ? 'in' : 'out';
+                if (act.action_type === 'Damage') result[dir].dps += act.value;
+                else if (act.action_type === 'Repair') result[dir].hps += act.value;
+                else if (act.action_type === 'Capacitor') result[dir].cap += act.value;
+                else if (act.action_type === 'Neut') result[dir].neut += act.value;
+            });
+        });
+
+        return result;
+    }, [combatActions]);
 
     return (
         <div className="status-bar-strip">
             <StatItem
                 label="DPS"
-                outValue={d.outgoing_dps}
-                inValue={d.incoming_dps}
+                outValue={totals.out.dps}
+                inValue={totals.in.dps}
                 outClass="text-dps-out"
                 inClass="text-dps-in"
             />
             <div className="strip-divider" />
             <StatItem
                 label="REP"
-                outValue={d.outgoing_hps}
-                inValue={d.incoming_hps}
+                outValue={totals.out.hps}
+                inValue={totals.in.hps}
                 outClass="text-rep-out"
                 inClass="text-rep-in"
             />
             <div className="strip-divider" />
             <StatItem
                 label="CAP"
-                outValue={d.outgoing_cap}
-                inValue={d.incoming_cap}
+                outValue={totals.out.cap}
+                inValue={totals.in.cap}
                 outClass="text-cap-out"
                 inClass="text-cap-in"
             />
             <div className="strip-divider" />
             <StatItem
                 label="NEUT"
-                outValue={d.outgoing_neut}
-                inValue={d.incoming_neut}
+                outValue={totals.out.neut}
+                inValue={totals.in.neut}
                 outClass="text-neut-out"
                 inClass="text-neut-in"
             />

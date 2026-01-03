@@ -39,13 +39,29 @@ AbyssWatcher is a high-performance DPS Meter for EVE Online, built as a modern d
     - `main.css`: Layout-specific styles for the overlay.
     - `window.css`: Custom window frame and resize handle styles.
   - **Components** (`ui/src/components/`):
-    - `StatusBar.tsx`: Top summary metrics (DPS, REP, CAP, NEUT).
-    - `CombatBreakdown.tsx`: Collapsible character list with `CharacterCard`.
+    - `StatusBar.tsx`: Top summary metrics (DPS, REP, CAP, NEUT). Derives totals from `combat_actions_by_character`.
+    - `CombatBreakdown.tsx`: Collapsible character list with `CharacterCard`. Each card computes its own totals.
     - `CharacterSelector.tsx`: Dropdown overlay for toggling active log tracking.
     - `SettingsModal.tsx`: Configuration overlay for log paths and analysis windows.
     - `ReplayControls.tsx`: Timeline slider and playback controls.
     - `LogBrowser.tsx` & `RawLogViewer.tsx`: Replay file selection and debugging.
     - `WindowFrame.tsx`: Custom window decoration system (TitleBar + Resize Handles).
+
+## Data Flow Architecture
+
+### Sum-of-Sums Pattern
+The UI uses a **single source of truth** for combat metrics:
+- **Backend** (`analysis.rs`): Computes `combat_actions_by_character` — a per-character map of all combat actions (DPS, HPS, CAP, NEUT) with their values and direction (incoming/outgoing).
+- **Frontend**: Both `StatusBar` and `CombatBreakdown` derive their totals from this same data:
+  - `StatusBar` sums ALL character actions to show global totals.
+  - `CharacterCard` sums only its own character's actions.
+  - This guarantees: **StatusBar totals = Σ(CharacterCard totals)**
+
+### Sliding Window Algorithm
+`analysis.rs` uses an efficient O(n) sliding window algorithm:
+- Maintains running sums (`char_actions_map`) that are incrementally updated as events enter/exit the time window.
+- Handles all 4 event types uniformly: `Damage`, `Repair`, `Capacitor`, `Neut`.
+- Both incoming and outgoing events are tracked and properly expired when they leave the window.
 
 ## Design & UX Principles: The "Unified Zero-Container HUD"
 

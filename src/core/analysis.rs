@@ -83,7 +83,7 @@ pub fn compute_dps_series(
         HashMap::new();
     let mut outgoing_by_char_target_damage: HashMap<String, HashMap<EntityName, f32>> =
         HashMap::new();
-    let mut outgoing_by_char_actions_map: HashMap<String, HashMap<(String, EventType, bool), f32>> =
+    let mut char_actions_map: HashMap<String, HashMap<(String, EventType, bool), f32>> =
         HashMap::new();
 
     for (i, sample) in samples.iter_mut().enumerate() {
@@ -110,14 +110,14 @@ pub fn compute_dps_series(
                     EventType::Capacitor => incoming_cap_sum += event.amount,
                     EventType::Neut => incoming_neut_sum += event.amount,
                 }
-                *outgoing_by_char_actions_map
+                *char_actions_map
                     .entry(event.character.clone())
                     .or_default()
                     .entry((event.weapon.clone(), event.event_type.clone(), true))
                     .or_insert(0.0) += event.amount;
             } else {
                 // Outgoing logic
-                *outgoing_by_char_actions_map
+                *char_actions_map
                     .entry(event.character.clone())
                     .or_default()
                     .entry((event.weapon.clone(), event.event_type.clone(), false))
@@ -167,7 +167,7 @@ pub fn compute_dps_series(
             let event = &events[start_idx];
 
             // Clean up combat actions map - runs for BOTH incoming and outgoing events
-            if let Some(char_actions) = outgoing_by_char_actions_map.get_mut(&event.character) {
+            if let Some(char_actions) = char_actions_map.get_mut(&event.character) {
                 let key = (event.weapon.clone(), event.event_type.clone(), event.incoming);
                 if let Some(val) = char_actions.get_mut(&key) {
                     *val -= event.amount;
@@ -176,7 +176,7 @@ pub fn compute_dps_series(
                     }
                 }
                 if char_actions.is_empty() {
-                    outgoing_by_char_actions_map.remove(&event.character);
+                    char_actions_map.remove(&event.character);
                 }
             }
 
@@ -316,7 +316,7 @@ pub fn compute_dps_series(
             })
             .collect();
 
-        sample.combat_actions_by_character = outgoing_by_char_actions_map
+        sample.combat_actions_by_character = char_actions_map
             .iter()
             .map(|(character, actions)| {
                 (

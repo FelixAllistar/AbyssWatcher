@@ -12,15 +12,9 @@ import './styles/common.css';
 import './styles/main.css';
 
 // Types matching the Rust backend
+// Note: Backend sends additional fields (outgoing_dps, incoming_dps, etc.) for debugging,
+// but frontend derives totals from combat_actions_by_character for consistency.
 export interface DpsUpdate {
-  outgoing_dps: number;
-  incoming_dps: number;
-  outgoing_hps: number;
-  incoming_hps: number;
-  outgoing_cap: number;
-  incoming_cap: number;
-  outgoing_neut: number;
-  incoming_neut: number;
   combat_actions_by_character: Record<string, CombatAction[]>;
 }
 
@@ -192,7 +186,7 @@ function MainApp() {
         )}
 
         <div id="data-container">
-          <StatusBar data={dpsData} />
+          <StatusBar combatActions={dpsData?.combat_actions_by_character ?? null} />
           <CombatBreakdown
             data={dpsData}
             characters={characters}
