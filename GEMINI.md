@@ -41,6 +41,8 @@ AbyssWatcher is a high-performance DPS Meter for EVE Online, built as a modern d
   - **Components** (`ui/src/components/`):
     - `StatusBar.tsx`: Top summary metrics (DPS, REP, CAP, NEUT).
     - `CombatBreakdown.tsx`: Collapsible character list with `CharacterCard`.
+    - `CharacterSelector.tsx`: Dropdown overlay for toggling active log tracking.
+    - `SettingsModal.tsx`: Configuration overlay for log paths and analysis windows.
     - `ReplayControls.tsx`: Timeline slider and playback controls.
     - `LogBrowser.tsx` & `RawLogViewer.tsx`: Replay file selection and debugging.
     - `WindowFrame.tsx`: Custom window decoration system (TitleBar + Resize Handles).
