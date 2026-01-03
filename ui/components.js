@@ -51,13 +51,60 @@ const Components = {
     }
   },
 
-  renderBreakdown: function (container, data, characters) {
-    let html = "";
+  // Persistent state for collapsibility
+  collapseState: new Set(),
 
-    // Convert data to Map for easy lookup
+  // Store latest render data for click handler
+  _lastData: null,
+  _lastCharacters: null,
+
+  toggleCollapse: function (id, container) {
+    if (this.collapseState.has(id)) {
+      this.collapseState.delete(id);
+    } else {
+      this.collapseState.add(id);
+    }
+
+    // Use CSS class toggle instead of full re-render to avoid ghosting issues
+    const header = container.querySelector(`[data-collapse-id="${id}"]`);
+    if (header) {
+      const indicator = header.querySelector('.collapse-indicator');
+      const isCollapsed = this.collapseState.has(id);
+
+      if (indicator) {
+        indicator.textContent = isCollapsed ? '▶' : '▼';
+      }
+
+      // Find the content sibling and toggle its visibility
+      const content = header.nextElementSibling;
+      if (content) {
+        content.classList.toggle('collapsed-content', isCollapsed);
+      }
+    }
+  },
+
+  renderBreakdown: function (container, data, characters) {
+    // Store for click handler
+    this._lastData = data;
+    this._lastCharacters = characters;
+
+    if (!container._hasCollapseListener) {
+      container.addEventListener('click', (e) => {
+        // Use mousedown target workaround - stop if mid-render
+        const header = e.target.closest('[data-collapse-id]');
+        if (header) {
+          e.preventDefault();
+          e.stopPropagation();
+          const id = header.dataset.collapseId;
+          this.toggleCollapse(id, container);
+        }
+      });
+      container._hasCollapseListener = true;
+    }
+
+    let html = "";
     const activeData = new Map(Object.entries(data.combat_actions_by_character || {}));
 
-    // Merge tracked characters that are inactive
     characters.forEach(char => {
       if (char.tracked && !activeData.has(char.character)) {
         activeData.set(char.character, []);
@@ -68,7 +115,6 @@ const Components = {
     chars.sort((a, b) => a[0].localeCompare(b[0]));
 
     chars.forEach(([name, actions]) => {
-      // Calculate totals by type and direction for badges
       let stats = {
         out: { dps: 0, hps: 0, cap: 0, neut: 0 },
         in: { dps: 0, hps: 0, cap: 0, neut: 0 }
@@ -82,51 +128,88 @@ const Components = {
         else if (act.action_type === "Neut") stats[dir].neut += act.value;
       });
 
-      // Build Header with Badges
-      let headerBadges = "";
+      let badgesHtml = "";
+      const addBadge = (outVal, inVal, type) => {
+        if (outVal <= 0 && inVal <= 0) return;
+        const outStyle = this.getMetricStyle(type, false);
+        const inStyle = this.getMetricStyle(type, true);
 
-      // Helper to add badge if value > 0
-      const addBadge = (val, type, dir) => {
-        if (val <= 0) return;
-        const style = this.getMetricStyle(type, dir === 'in');
-        const prefix = (type !== 'Damage') ? type + ' ' : '';
-        headerBadges += `<span class="${style.class}" style="margin-left:6px">${prefix}${val.toFixed(1)}</span>`;
+        badgesHtml += `<div class="badge">
+          ${outVal > 0 ? `<span class="${outStyle.class}">↗ ${outVal.toFixed(0)}</span>` : `<span class="text-dim" style="opacity:0.4">↗ 0</span>`}
+          <span class="badge-sep">|</span>
+          ${inVal > 0 ? `<span class="${inStyle.class}">${inVal.toFixed(0)} ↙</span>` : `<span class="text-dim" style="opacity:0.4">0 ↙</span>`}
+        </div>`;
       };
 
-      addBadge(stats.out.dps, "Damage", "out");
-      addBadge(stats.in.dps, "Damage", "in");
-      addBadge(stats.out.hps, "Repair", "out");
-      addBadge(stats.in.hps, "Repair", "in");
-      addBadge(stats.out.cap, "Capacitor", "out");
-      addBadge(stats.in.cap, "Capacitor", "in");
-      addBadge(stats.out.neut, "Neut", "out");
-      addBadge(stats.in.neut, "Neut", "in");
+      addBadge(stats.out.dps, stats.in.dps, "Damage");
+      addBadge(stats.out.hps, stats.in.hps, "Repair");
+      addBadge(stats.out.cap, stats.in.cap, "Capacitor");
+      addBadge(stats.out.neut, stats.in.neut, "Neut");
 
-      // Fallback for idle tracked chars
-      if (headerBadges === "") headerBadges = `<span class="text-dps-out" style="margin-left:6px">0.0</span>`;
+      if (badgesHtml === "") badgesHtml = `<span class="badge text-dim" style="opacity:0.4">IDLE</span>`;
 
-      html += `<div style="margin-bottom:8px; border-bottom:1px solid var(--border-color-dim); padding-bottom:4px;">
-          <div style="display:flex; justify-content:space-between; font-weight:700">
-            <span>${name}</span>
-            <div>${headerBadges}</div>
-          </div>`;
+      const charCollapseId = `char-${name}`;
+      const isCharCollapsed = this.collapseState.has(charCollapseId);
 
-      // Sort actions: Outgoing first, then Incoming. Within each, by value desc.
-      actions.sort((a, b) => {
-        if (a.incoming !== b.incoming) return a.incoming ? 1 : -1;
-        return b.value - a.value;
-      });
+      html += `<div class="breakdown-char-card">
+          <div class="breakdown-header" data-collapse-id="${charCollapseId}">
+            <span class="char-name">${name}${isCharCollapsed ? ' <span class="collapse-indicator">▶</span>' : ' <span class="collapse-indicator">▼</span>'}</span>
+            <div class="badge-container">${badgesHtml}</div>
+          </div>
+          <div class="char-content ${isCharCollapsed ? 'collapsed-content' : ''}">`;
+
+      // Group actions by type
+      const groups = {
+        "Damage": [],
+        "Repair": [],
+        "Capacitor": [],
+        "Neut": []
+      };
 
       actions.forEach(act => {
-        const style = this.getMetricStyle(act.action_type, act.incoming);
-        const prefix = act.incoming ? "↙ " : "↗ ";
-
-        html += `<div class="${style.class}" style="font-size:9px; display:flex; justify-content:space-between; align-items:center; margin-left: 4px;">
-              <span>${prefix}${act.name}</span>
-              <span>${act.value.toFixed(1)} <span style="font-size:7px; opacity:0.7">${style.label}</span></span>
-            </div>`;
+        if (groups[act.action_type]) {
+          groups[act.action_type].push(act);
+        }
       });
-      html += `</div>`;
+
+      // Render each group
+      Object.entries(groups).forEach(([type, items]) => {
+        if (items.length === 0) return;
+
+        const groupCollapseId = `group-${name}-${type}`;
+        const isGroupCollapsed = this.collapseState.has(groupCollapseId);
+        const label = type === 'Damage' ? 'DPS' : type;
+
+        // Sort items: Outgoing first, then value desc
+        items.sort((a, b) => {
+          if (a.incoming !== b.incoming) return a.incoming ? 1 : -1;
+          return b.value - a.value;
+        });
+
+        html += `<div class="category-section">
+          <div class="category-header" data-collapse-id="${groupCollapseId}">
+            <span>${label}</span>
+            <span class="collapse-indicator">${isGroupCollapsed ? '▶' : '▼'}</span>
+          </div>
+          <div class="category-content ${isGroupCollapsed ? 'collapsed-content' : ''}">`;
+
+        items.forEach(act => {
+          const style = this.getMetricStyle(act.action_type, act.incoming);
+          const icon = act.incoming ? "↙" : "↗";
+
+          html += `<div class="action-row">
+                <div class="action-name ${style.class}">
+                  <span>${icon}</span>
+                  <span>${act.name}</span>
+                </div>
+                <div class="action-value ${style.class}">
+                  ${act.value.toFixed(1)}<span class="action-unit">${style.label}</span>
+                </div>
+              </div>`;
+        });
+        html += `</div></div>`;
+      });
+      html += `</div></div>`;
     });
 
     container.innerHTML = html;

@@ -2,29 +2,6 @@ try {
     const { listen } = window.__TAURI__.event;
     const { invoke } = window.__TAURI__.core;
 
-    // ===== Linux Ghosting Fix: Debounced Resize =====
-    // Strategy: Only trigger the expensive resize when updates PAUSE.
-    // This prevents freezing during high-DPS streams.
-
-    let debounceTimer;
-    const triggerDebouncedRefresh = () => {
-        if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-            invoke('refresh_transparency').catch(e => console.error(e));
-            debounceTimer = null;
-        }, 200); // Wait for 200ms of silence before refreshing
-    };
-
-    const ghostingObserver = new MutationObserver(() => triggerDebouncedRefresh());
-    ghostingObserver.observe(document.body, {
-        childList: true,
-        subtree: true,
-        characterData: true,
-        attributes: true,
-        attributeFilter: ['style', 'class'] // Only watch visual changes
-    });
-    // ===== End Linux Ghosting Fix =====
-
     // Elements
     const els = {
         selectionContainer: document.getElementById("selection-container"),

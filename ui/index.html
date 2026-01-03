@@ -11,7 +11,7 @@
 <body>
   <div id="app">
     <div id="header">
-      <h1>Watcher</h1>
+      <div></div> <!-- Spacer for flexbox if needed -->
       <div class="header-controls">
         <button id="toggle-settings" class="icon-btn">Chars</button>
         <button id="toggle-config" class="icon-btn">⚙</button>
@@ -41,45 +41,48 @@
     <div id="selection-container" class="hidden"></div>
 
     <div id="data-container">
-      <div class="dps-summary">
-        <div class="dps-box">
-          <span class="label-header">DPS</span>
-          <div class="sub-values">
-            <div class="sub-val"><span class="sub-label">OUT</span><span id="out-dps"
-                class="value text-dps-out">0.0</span>
-            </div>
-            <div class="sub-val"><span class="sub-label">IN</span><span id="in-dps" class="value text-dps-in">0.0</span>
-            </div>
-          </div>
-        </div>
-        <div class="dps-box">
-          <span class="label-header">REP</span>
-          <div class="sub-values">
-            <div class="sub-val"><span class="sub-label">OUT</span><span id="out-hps"
-                class="value text-rep-out">0.0</span>
-            </div>
-            <div class="sub-val"><span class="sub-label">IN</span><span id="in-hps" class="value text-rep-in">0.0</span>
+      <div class="status-bar">
+        <div class="stat-pair">
+          <span class="stat-label">DPS</span>
+          <div class="stat-values">
+            <div class="val-group text-dps-out"><span class="dir-icon">↗</span><span id="out-dps"
+                class="value">0.0</span></div>
+            <div class="stat-divider"></div>
+            <div class="val-group text-dps-in"><span id="in-dps" class="value">0.0</span><span class="dir-icon">↙</span>
             </div>
           </div>
         </div>
-        <div class="dps-box">
-          <span class="label-header">CAP</span>
-          <div class="sub-values">
-            <div class="sub-val"><span class="sub-label">OUT</span><span id="out-cap"
-                class="value text-cap-out">0.0</span>
-            </div>
-            <div class="sub-val"><span class="sub-label">IN</span><span id="in-cap" class="value text-cap-in">0.0</span>
+
+        <div class="stat-pair">
+          <span class="stat-label">REP</span>
+          <div class="stat-values">
+            <div class="val-group text-rep-out"><span class="dir-icon">↗</span><span id="out-hps"
+                class="value">0.0</span></div>
+            <div class="stat-divider"></div>
+            <div class="val-group text-rep-in"><span id="in-hps" class="value">0.0</span><span class="dir-icon">↙</span>
             </div>
           </div>
         </div>
-        <div class="dps-box">
-          <span class="label-header">NEUT</span>
-          <div class="sub-values">
-            <div class="sub-val"><span class="sub-label">OUT</span><span id="out-neut"
-                class="value text-neut-out">0.0</span>
+
+        <div class="stat-pair">
+          <span class="stat-label">CAP</span>
+          <div class="stat-values">
+            <div class="val-group text-cap-out"><span class="dir-icon">↗</span><span id="out-cap"
+                class="value">0.0</span></div>
+            <div class="stat-divider"></div>
+            <div class="val-group text-cap-in"><span id="in-cap" class="value">0.0</span><span class="dir-icon">↙</span>
             </div>
-            <div class="sub-val"><span class="sub-label">IN</span><span id="in-neut"
-                class="value text-neut-in">0.0</span>
+          </div>
+        </div>
+
+        <div class="stat-pair">
+          <span class="stat-label">NEUT</span>
+          <div class="stat-values">
+            <div class="val-group text-neut-out"><span class="dir-icon">↗</span><span id="out-neut"
+                class="value">0.0</span></div>
+            <div class="stat-divider"></div>
+            <div class="val-group text-neut-in"><span id="in-neut" class="value">0.0</span><span
+                class="dir-icon">↙</span>
             </div>
           </div>
         </div>

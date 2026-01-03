@@ -20,24 +20,24 @@
      Standardized across summary cards and character breakdown.
   */
 
-  /* DPS (Dealt = Blue, Received = Red) */
-  --color-dps-out: #00d2ff;
-  --color-dps-in: #ff5e5e;
+  /* DPS (Dealt = Blue-cyan, Received = Red-orange) */
+  --color-dps-out: #00e5ff;
+  --color-dps-in: #ff4d4d;
 
   /* REPAIR (Dealt = Lime, Received = Emerald) */
-  --color-rep-out: #a3e635;
-  --color-rep-in: #4ade80;
+  --color-rep-out: #bef264;
+  --color-rep-in: #34d399;
 
   /* CAPACITOR (Dealt = Yellow, Received = Amber) */
-  --color-cap-out: #facc15;
+  --color-cap-out: #fde047;
   --color-cap-in: #fbbf24;
 
   /* NEUTER (Dealt = LightPurple, Received = DeepPurple) */
-  --color-neut-out: #c084fc;
-  --color-neut-in: #a855f7;
+  --color-neut-out: #d8b4fe;
+  --color-neut-in: #8b5cf6;
 
   /* Default/Other */
-  --color-action-default: #aaaaaa;
+  --color-action-default: #94a3b8;
 
   /* Button Colors */
   --btn-bg: rgba(255, 255, 255, 0.05);

@@ -1,14 +1,21 @@
+* {
+    box-sizing: border-box;
+}
+
 /* Global Resets & Basics */
+html,
 body {
     margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
     background-color: transparent;
     color: var(--text-main);
     font-family: var(--font-stack);
-    overflow: hidden;
-
-    /* Linux Ghosting Fix: Force GPU layer */
-    transform: translateZ(0);
-    will-change: transform, opacity;
 }
 
 h1 {
@@ -91,45 +98,65 @@ h1 {
     border: none;
 }
 
-/* Data / Summary Boxes */
-.dps-summary {
+/* Tactical Status Bar */
+.status-bar {
     display: flex;
     gap: 8px;
-    justify-content: space-around;
-    margin-top: 10px;
+    justify-content: space-between;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color-dim);
+    backdrop-filter: blur(12px);
+    margin: 8px 0;
+    box-sizing: border-box;
+    width: 100%;
 }
 
-.dps-box {
-    text-align: center;
-    flex: 1;
-    background: var(--bg-panel);
-    padding: 4px;
-    border-radius: 4px;
-}
-
-/* Typography for stats */
-.label-header {
-    font-size: 9px;
-    font-weight: 800;
-    color: var(--text-dim);
-    display: block;
-}
-
-.sub-values {
+.stat-pair {
     display: flex;
-    justify-content: center;
-    gap: 6px;
+    flex-direction: column;
+    gap: 0px;
+}
+
+.stat-label {
+    font-size: 8px;
+    font-weight: 900;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+    opacity: 0.6;
+}
+
+.stat-values {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-variant-numeric: tabular-nums;
+}
+
+.val-group {
+    display: flex;
+    align-items: center;
+    gap: 3px;
 }
 
 .value {
-    font-size: 18px;
+    font-size: 14px;
     font-weight: 800;
 }
 
-.sub-label {
-    font-size: 7px;
-    opacity: 0.5;
-    display: block;
+.dir-icon {
+    font-size: 10px;
+    font-weight: 900;
+}
+
+.stat-divider {
+    width: 1px;
+    height: 10px;
+    background: var(--border-color-dim);
+    margin: 0 1px;
 }
 
 /* Unified Typography Utilities */
@@ -207,4 +234,134 @@ h1 {
     flex-grow: 1;
     overflow-y: auto;
     font-size: 11px;
+}
+
+.breakdown-char-card {
+    margin-bottom: 16px;
+    padding: 0;
+}
+
+.breakdown-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    user-select: none;
+}
+
+.breakdown-header:hover .char-name {
+    color: var(--color-dps-out);
+}
+
+/* Ensure child elements don't block clicks */
+.breakdown-header>* {
+    pointer-events: none;
+}
+
+.breakdown-header {
+    pointer-events: auto;
+}
+
+.char-name {
+    font-weight: 700;
+    font-size: 12px;
+    color: var(--text-main);
+}
+
+.badge-container {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.badge {
+    font-size: 9px;
+    font-weight: 800;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.badge-sep {
+    opacity: 0.3;
+    font-weight: 400;
+}
+
+.action-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2px 4px;
+    border-radius: 2px;
+    margin-bottom: 1px;
+}
+
+.action-row:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.action-name {
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.action-value {
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.action-unit {
+    font-size: 8px;
+    opacity: 0.6;
+    margin-left: 2px;
+}
+
+.category-section {
+    margin-top: 8px;
+}
+
+.category-header {
+    font-size: 8px;
+    font-weight: 800;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+    opacity: 0.8;
+    border-left: 2px solid var(--border-color);
+    padding-left: 4px;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    justify-content: space-between;
+    pointer-events: auto;
+}
+
+.category-header>* {
+    pointer-events: none;
+}
+
+.category-header:hover {
+    color: var(--text-main);
+}
+
+/* Collapsible States */
+.collapsed-content {
+    display: none !important;
+}
+
+.collapse-indicator {
+    font-size: 7px;
+    opacity: 0.5;
+    margin-left: 4px;
 }
