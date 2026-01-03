@@ -1,9 +1,13 @@
 :root {
   /* Core Colors */
-  --bg-color: rgba(15, 15, 20, 0.85);
-  --bg-color-solid: #0f0f14;
-  --bg-panel: rgba(0, 0, 0, 0.3);
-  --bg-panel-hover: rgba(0, 0, 0, 0.4);
+  --bg-color: rgba(15, 15, 20, 0.9);
+  --bg-color-solid: linear-gradient(180deg, #161621 0%, #0f0f14 100%);
+  --bg-panel: rgba(30, 35, 50, 0.25);
+  --bg-panel-hover: rgba(40, 45, 60, 0.35);
+
+  /* New Depth Utils */
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.05);
 
   --border-color: rgba(255, 255, 255, 0.1);
   --border-color-dim: rgba(255, 255, 255, 0.05);

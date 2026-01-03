@@ -6,9 +6,11 @@
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background-color: var(--bg-color-solid);
+  background: var(--bg-color-solid);
   padding: 10px;
   border: 1px solid var(--border-color);
+  border-top: 1px solid var(--glass-border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
   box-sizing: border-box;
 }
 
@@ -32,12 +34,15 @@
   top: 30px;
   left: 10px;
   right: 10px;
-  background: rgba(15, 15, 20, 0.95);
+  right: 10px;
+  background: rgba(20, 20, 25, 0.98);
   border: 1px solid var(--border-color);
+  border-top: 1px solid var(--glass-border);
   border-radius: 6px;
   padding: 10px;
   z-index: 100;
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 
 .form-group {

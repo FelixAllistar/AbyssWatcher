@@ -9,7 +9,7 @@ AbyssWatcher is a high-performance DPS Meter for EVE Online, built as a modern d
 
 ## Architecture Overview
 
-- **Tauri Application**: The project is structured as a standard Tauri app where the root directory contains the Rust backend (`Cargo.toml`) and the `ui` directory contains the frontend assets.
+- **Tauri Application**: The project is structured as a standard single-package Tauri app where the root directory contains both the Rust backend (`Cargo.toml`) and the frontend configuration, with source code in the `ui` directory.
 - **Backend (Rust)**:
   - `src/main.rs`: The entry point that initializes the Tauri runtime via `abyss_watcher::run()`.
   - `src/app.rs`: The core Tauri application logic, command handlers, and state management.
@@ -26,7 +26,7 @@ AbyssWatcher is a high-performance DPS Meter for EVE Online, built as a modern d
     - `replay_engine.rs`: Log replay with merged streams and speed control.
 - **Frontend (Web)**:
   - Located in `ui/`.
-  - **Stack**: React 18, TypeScript, Vite 6.
+  - **Stack**: React 18, TypeScript, Vite 7 (configured at root).
   - **State Management**: React Hooks (`useState`, `useEffect`) avoiding full DOM repaints.
   - **Communication**: Communicates with Rust via `@tauri-apps/api` (Commands & Events).
   - **Entry Point**: `ui/src/main.tsx` → `ui/src/App.tsx`
@@ -55,14 +55,24 @@ Follow these guidelines from `conductor/product-guidelines.md`:
 
 - **Core**: Rust (2021 Edition) for performance and safety.
 - **Framework**: Tauri (v2) for the application shell and system integration.
-- **Frontend**: React 18, TypeScript, Vite.
+- **Frontend**: React 18, TypeScript, Vite 7 (Single-Repo Structure).
 - **Async Runtime**: `tokio` for non-blocking I/O (log watching).
 - **Serialization**: `serde` / `serde_json`.
 - **Time**: `chrono` for EVE log timestamp parsing.
 - **Pattern Matching**: `regex` for parsing combat log lines.
-- **Key Plugins**:
-  - `tauri-plugin-dialog`: For selecting gamelog directories.
   - `tauri-plugin-log`: For internal application logging.
+
+## Testing
+
+- **Strategy**: Unit tests are co-located with the code they test (inline `#[cfg(test)]` modules).
+- **Core Tests**:
+  - `src/core/parser.rs`: Extensive pattern matching tests for combat log lines.
+  - `src/core/analysis.rs`: DPS computation and windowing logic verification.
+  - `src/core/state.rs`: Event storage and sorting tests.
+- **Dedicated Test Modules**:
+  - `src/core/sim_test.rs`: End-to-end simulation of multi-character log streams.
+  - `src/core/bench_analysis.rs`: Performance benchmarks for high-volume event processing.
+- **Running Tests**: Execute `cargo test` in the root directory to run all backend tests.
 
 ## Core Goals
 

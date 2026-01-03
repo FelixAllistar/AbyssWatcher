@@ -13,9 +13,14 @@ body {
 }
 
 body {
-    background-color: var(--bg-color-solid);
+    background: var(--bg-color-solid);
     color: var(--text-main);
     font-family: var(--font-stack);
+}
+
+#root {
+    height: 100%;
+    width: 100%;
 }
 
 h1 {
@@ -237,17 +242,31 @@ h1 {
 }
 
 .breakdown-char-card {
-    margin-bottom: 16px;
-    padding: 0;
+    margin-bottom: 12px;
+    padding: 8px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    border-top: 1px solid var(--glass-border);
+    border-radius: 6px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.empty-state {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 32px;
+    margin-top: 20px;
+    background: var(--bg-panel);
+    border-radius: 6px;
+    border: 1px dashed var(--border-color);
 }
 
 .breakdown-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
     padding-bottom: 6px;
-    border-bottom: 1px solid var(--border-color);
     cursor: pointer;
     user-select: none;
 }
@@ -283,11 +302,11 @@ h1 {
     font-weight: 800;
     padding: 1px 6px;
     border-radius: 4px;
-    background: rgba(0, 0, 0, 0.4);
+    background: var(--bg-panel);
     display: flex;
     align-items: center;
     gap: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--glass-border);
 }
 
 .badge-sep {
