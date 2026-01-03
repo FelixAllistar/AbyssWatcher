@@ -1,3 +1,6 @@
+// NOTE: TypeScript mirror types are in ui/src/types.ts
+// Keep both files in sync when modifying data structures.
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;

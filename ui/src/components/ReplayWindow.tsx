@@ -6,7 +6,7 @@ import CombatBreakdown from './CombatBreakdown';
 import ReplayControls from './ReplayControls';
 import LogBrowser from './LogBrowser';
 import RawLogViewer from './RawLogViewer';
-import type { DpsUpdate, CharacterState } from '../App';
+import type { DpsUpdate, CharacterState } from '../types';
 import '../styles/replay.css';
 
 interface ReplayStatus {

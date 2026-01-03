@@ -1,29 +1,8 @@
 import { type FC, useState, useMemo } from 'react';
-
-interface TargetHit {
-    target: string;
-    value: number;
-}
-
-interface CombatAction {
-    name: string;
-    action_type: 'Damage' | 'Repair' | 'Capacitor' | 'Neut';
-    incoming: boolean;
-    value: number;
-    targets: TargetHit[];
-}
-
-interface DpsData {
-    combat_actions_by_character: Record<string, CombatAction[]>;
-}
-
-interface CharacterState {
-    character: string;
-    tracked: boolean;
-}
+import type { CombatAction, DpsUpdate, CharacterState } from '../types';
 
 interface CombatBreakdownProps {
-    data: DpsData | null;
+    data: DpsUpdate | null;
     characters: CharacterState[];
 }
 

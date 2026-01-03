@@ -10,31 +10,10 @@ import ReplayWindow from './components/ReplayWindow';
 import './styles/theme.css';
 import './styles/common.css';
 import './styles/main.css';
+import type { DpsUpdate, CharacterState, Settings } from './types';
 
-// Types matching the Rust backend
-// Note: Backend sends additional fields (outgoing_dps, incoming_dps, etc.) for debugging,
-// but frontend derives totals from combat_actions_by_character for consistency.
-export interface DpsUpdate {
-  combat_actions_by_character: Record<string, CombatAction[]>;
-}
-
-export interface CombatAction {
-  name: string;
-  action_type: 'Damage' | 'Repair' | 'Capacitor' | 'Neut';
-  incoming: boolean;
-  value: number;
-}
-
-export interface CharacterState {
-  character: string;
-  path: string;
-  tracked: boolean;
-}
-
-interface Settings {
-  gamelog_dir: string;
-  dps_window_seconds: number;
-}
+// Re-export types for other modules that import from App
+export type { DpsUpdate, CharacterState, CombatAction, TargetHit, Settings } from './types';
 
 import WindowFrame from './components/WindowFrame';
 

@@ -1,11 +1,5 @@
 import { type FC, useMemo } from 'react';
-
-interface CombatAction {
-    name: string;
-    action_type: 'Damage' | 'Repair' | 'Capacitor' | 'Neut';
-    incoming: boolean;
-    value: number;
-}
+import type { CombatAction } from '../types';
 
 interface StatusBarProps {
     combatActions: Record<string, CombatAction[]> | null;
