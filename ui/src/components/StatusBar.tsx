@@ -23,19 +23,17 @@ interface StatPairProps {
     inClass: string;
 }
 
-const StatPair: FC<StatPairProps> = ({ label, outValue, inValue, outClass, inClass }) => (
-    <div className="stat-pair">
+const StatItem: FC<StatPairProps> = ({ label, outValue, inValue, outClass, inClass }) => (
+    <div className="stat-item">
         <span className="stat-label">{label}</span>
         <div className="stat-values">
-            <div className={`val-group ${outClass}`}>
-                <span className="dir-icon">↗</span>
-                <span className="value">{outValue.toFixed(1)}</span>
-            </div>
-            <div className="stat-divider"></div>
-            <div className={`val-group ${inClass}`}>
-                <span className="value">{inValue.toFixed(1)}</span>
-                <span className="dir-icon">↙</span>
-            </div>
+            <span className={`val-out ${outClass}`}>
+                {outValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}
+            </span>
+            <span className="val-divider">/</span>
+            <span className={`val-in ${inClass}`}>
+                {inValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}
+            </span>
         </div>
     </div>
 );
@@ -53,29 +51,32 @@ const StatusBar: FC<StatusBarProps> = ({ data }) => {
     };
 
     return (
-        <div className="status-bar">
-            <StatPair
+        <div className="status-bar-strip">
+            <StatItem
                 label="DPS"
                 outValue={d.outgoing_dps}
                 inValue={d.incoming_dps}
                 outClass="text-dps-out"
                 inClass="text-dps-in"
             />
-            <StatPair
+            <div className="strip-divider" />
+            <StatItem
                 label="REP"
                 outValue={d.outgoing_hps}
                 inValue={d.incoming_hps}
                 outClass="text-rep-out"
                 inClass="text-rep-in"
             />
-            <StatPair
+            <div className="strip-divider" />
+            <StatItem
                 label="CAP"
                 outValue={d.outgoing_cap}
                 inValue={d.incoming_cap}
                 outClass="text-cap-out"
                 inClass="text-cap-in"
             />
-            <StatPair
+            <div className="strip-divider" />
+            <StatItem
                 label="NEUT"
                 outValue={d.outgoing_neut}
                 inValue={d.incoming_neut}
