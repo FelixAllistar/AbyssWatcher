@@ -12,26 +12,30 @@ interface CharacterSelectorProps {
 }
 
 const CharacterSelector: FC<CharacterSelectorProps> = ({ characters, onToggle }) => {
-    if (characters.length === 0) {
-        return (
-            <div id="selection-container">
-                <div className="text-dim" style={{ padding: '4px' }}>No logs found.</div>
-            </div>
-        );
-    }
-
     return (
         <div id="selection-container">
-            {characters.map((char) => (
-                <div className="char-row" key={char.path}>
-                    <input
-                        type="checkbox"
-                        checked={char.tracked}
-                        onChange={() => onToggle(char)}
-                    />
-                    {char.character}
-                </div>
-            ))}
+            {characters.length === 0 ? (
+                <div className="text-dim" style={{ padding: '8px' }}>No logs found.</div>
+            ) : (
+                characters.map((char) => (
+                    <div
+                        className={`char-row ${!char.tracked ? 'untracked' : ''}`}
+                        key={char.path}
+                        onClick={() => onToggle(char)}
+                    >
+                        <input
+                            type="checkbox"
+                            checked={char.tracked}
+                            onChange={(e) => {
+                                // Prevent double toggle since outer div has onClick
+                                e.stopPropagation();
+                                onToggle(char);
+                            }}
+                        />
+                        <span>{char.character}</span>
+                    </div>
+                ))
+            )}
         </div>
     );
 };

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -50,6 +50,39 @@ function MainApp() {
   const [showSettings, setShowSettings] = useState(false);
   const [showCharacterSelector, setShowCharacterSelector] = useState(false);
   const [settings, setSettings] = useState<Settings>({ gamelog_dir: '', dps_window_seconds: 5 });
+
+  const charSelectorRef = useRef<HTMLDivElement>(null);
+  const settingsRef = useRef<HTMLDivElement>(null);
+  const charBtnRef = useRef<HTMLButtonElement>(null);
+  const settingsBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+
+      // Close character selector if clicking outside of it and its toggle button
+      if (showCharacterSelector &&
+        charSelectorRef.current && !charSelectorRef.current.contains(target) &&
+        charBtnRef.current && !charBtnRef.current.contains(target)) {
+        setShowCharacterSelector(false);
+      }
+
+      // Close settings if clicking outside of it and its toggle button
+      if (showSettings &&
+        settingsRef.current && !settingsRef.current.contains(target) &&
+        settingsBtnRef.current && !settingsBtnRef.current.contains(target)) {
+        setShowSettings(false);
+      }
+    };
+
+    if (showCharacterSelector || showSettings) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showCharacterSelector, showSettings]);
 
   useEffect(() => {
     // Load initial data
@@ -113,6 +146,7 @@ function MainApp() {
   const headerControls = (
     <>
       <button
+        ref={charBtnRef}
         className="icon-btn"
         onClick={() => {
           setShowCharacterSelector(!showCharacterSelector);
@@ -122,6 +156,7 @@ function MainApp() {
         Chars
       </button>
       <button
+        ref={settingsBtnRef}
         className="icon-btn"
         onClick={() => {
           setShowSettings(!showSettings);
@@ -137,19 +172,23 @@ function MainApp() {
     <WindowFrame variant="main" headerActions={headerControls}>
       <div id="app" className="main-overlay">
         {showSettings && (
-          <SettingsModal
-            settings={settings}
-            onSave={handleSaveSettings}
-            onCancel={() => setShowSettings(false)}
-            onOpenReplay={handleOpenReplay}
-          />
+          <div ref={settingsRef}>
+            <SettingsModal
+              settings={settings}
+              onSave={handleSaveSettings}
+              onCancel={() => setShowSettings(false)}
+              onOpenReplay={handleOpenReplay}
+            />
+          </div>
         )}
 
         {showCharacterSelector && (
-          <CharacterSelector
-            characters={characters}
-            onToggle={handleToggleTracking}
-          />
+          <div ref={charSelectorRef}>
+            <CharacterSelector
+              characters={characters}
+              onToggle={handleToggleTracking}
+            />
+          </div>
         )}
 
         <div id="data-container">
