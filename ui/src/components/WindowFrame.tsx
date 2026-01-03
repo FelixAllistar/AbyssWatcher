@@ -57,11 +57,9 @@ const WindowFrame: FC<WindowFrameProps> = ({ title = "AbyssWatcher", children, v
                     )}
 
                     {/* Window System Buttons */}
+                    <button className="sys-btn" onClick={handleMinimize} title="Minimize">─</button>
                     {variant === 'replay' && (
-                        <>
-                            <button className="sys-btn" onClick={handleMinimize} title="Minimize">─</button>
-                            <button className="sys-btn" onClick={handleMaximize} title="Maximize">□</button>
-                        </>
+                        <button className="sys-btn" onClick={handleMaximize} title="Maximize">□</button>
                     )}
 
                     <button className="sys-btn close" onClick={handleClose} title="Close">✕</button>
