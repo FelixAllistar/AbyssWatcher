@@ -165,6 +165,21 @@ pub fn compute_dps_series(
             && (events[start_idx].timestamp.as_millis() as u64) < window_start_millis
         {
             let event = &events[start_idx];
+
+            // Clean up combat actions map - runs for BOTH incoming and outgoing events
+            if let Some(char_actions) = outgoing_by_char_actions_map.get_mut(&event.character) {
+                let key = (event.weapon.clone(), event.event_type.clone(), event.incoming);
+                if let Some(val) = char_actions.get_mut(&key) {
+                    *val -= event.amount;
+                    if *val <= 0.0 {
+                        char_actions.remove(&key);
+                    }
+                }
+                if char_actions.is_empty() {
+                    outgoing_by_char_actions_map.remove(&event.character);
+                }
+            }
+
             if event.incoming {
                 match event.event_type {
                     EventType::Damage => {
@@ -187,19 +202,6 @@ pub fn compute_dps_series(
                     EventType::Neut => incoming_neut_sum -= event.amount,
                 }
             } else {
-                if let Some(char_actions) = outgoing_by_char_actions_map.get_mut(&event.character) {
-                    let key = (event.weapon.clone(), event.event_type.clone(), event.incoming);
-                    if let Some(val) = char_actions.get_mut(&key) {
-                        *val -= event.amount;
-                        if *val <= 0.0 {
-                            char_actions.remove(&key);
-                        }
-                    }
-                    if char_actions.is_empty() {
-                        outgoing_by_char_actions_map.remove(&event.character);
-                    }
-                }
-
                 match event.event_type {
                     EventType::Damage => {
                         outgoing_sum -= event.amount;
@@ -510,5 +512,36 @@ mod tests {
         let neut = actions.iter().find(|a| a.name == "Neut").unwrap();
         assert_eq!(neut.action_type, EventType::Neut);
         assert_eq!(neut.value, 20.0);
+    }
+
+    #[test]
+    fn expires_incoming_events_from_actions_map() {
+        // Create an incoming damage event at t=1s with a 1s window
+        let events = vec![
+            CombatEvent {
+                timestamp: Duration::from_secs(1),
+                source: "Enemy".to_string(),
+                target: "Pilot".to_string(),
+                weapon: "NPC Attack".to_string(),
+                amount: 100.0,
+                incoming: true,
+                character: "Pilot".to_string(),
+                event_type: EventType::Damage,
+            },
+        ];
+
+        // Sample at t=3s (2 seconds after event, window is 1s)
+        let samples = compute_dps_series(&events, Duration::from_secs(1), Duration::from_secs(3));
+        let sample_at_3s = &samples[3];
+
+        // The incoming event should have expired from the window
+        assert!(
+            !sample_at_3s.combat_actions_by_character.contains_key("Pilot"),
+            "Incoming events should be removed from actions map after window expires"
+        );
+        assert_eq!(
+            sample_at_3s.incoming_dps, 0.0,
+            "Incoming DPS should be 0 after window expires"
+        );
     }
 }
