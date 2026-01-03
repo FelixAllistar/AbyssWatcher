@@ -1,0 +1,105 @@
+@import 'theme.css';
+@import 'common.css';
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background-color: var(--bg-color-solid);
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  box-sizing: border-box;
+}
+
+
+
+#header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+/* Margin-top combat breakdown handled in common if generic, or here */
+#combat-breakdown {
+  margin-top: 10px;
+}
+
+/* Settings Modal */
+#settings-modal {
+  position: absolute;
+  top: 30px;
+  left: 10px;
+  right: 10px;
+  background: rgba(15, 15, 20, 0.95);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 10px;
+  z-index: 100;
+  backdrop-filter: blur(10px);
+}
+
+.form-group {
+  margin-bottom: 10px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.form-row {
+  display: flex;
+  gap: 6px;
+}
+
+input {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 4px;
+  font-size: 11px;
+  border-radius: 3px;
+}
+
+input[type="text"] {
+  flex-grow: 1;
+}
+
+input[type="number"] {
+  width: 60px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* Selection */
+#selection-container {
+  background: var(--bg-panel_hover);
+  /* or dark transparent */
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  margin-bottom: 10px;
+  max-height: 120px;
+  overflow-y: auto;
+  font-size: 11px;
+  padding: 4px;
+}
+
+.char-row {
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.char-row input {
+  margin-right: 8px;
+}

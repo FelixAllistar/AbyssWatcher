@@ -4,9 +4,10 @@
   "version": "0.1.0",
   "identifier": "com.abysswatcher.app",
   "build": {
-    "frontendDist": "ui",
-    "beforeDevCommand": "",
-    "beforeBuildCommand": ""
+    "frontendDist": "ui/dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run ui:dev",
+    "beforeBuildCommand": "npm run ui:build"
   },
   "app": {
     "withGlobalTauri": true,

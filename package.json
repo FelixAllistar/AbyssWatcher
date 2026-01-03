@@ -1,0 +1,8 @@
+{
+    "name": "abyss-watcher-root",
+    "private": true,
+    "scripts": {
+        "ui:dev": "npm run dev --prefix ui",
+        "ui:build": "npm run build --prefix ui"
+    }
+}

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AbyssWatcher</title>
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+
+<body>
+  <div id="app">
+    <div id="header">
+      <div></div> <!-- Spacer for flexbox if needed -->
+      <div class="header-controls">
+        <button id="toggle-settings" class="icon-btn">Chars</button>
+        <button id="toggle-config" class="icon-btn">⚙</button>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="hidden">
+      <div class="form-group">
+        <label>Game Logs Directory</label>
+        <div class="form-row">
+          <input type="text" id="log-dir-input" readonly />
+          <button id="browse-btn" class="icon-btn">...</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>DPS Window (Seconds)</label>
+        <input type="number" id="dps-window-input" min="1" max="60" />
+      </div>
+      <div class="modal-actions">
+        <button id="replay-btn" class="icon-btn" style="color: #ffeb3b;">↺ Replay</button>
+        <button id="cancel-settings" class="icon-btn">Cancel</button>
+        <button id="save-settings" class="icon-btn primary-btn">Save</button>
+      </div>
+    </div>
+
+    <div id="selection-container" class="hidden"></div>
+
+    <div id="data-container">
+      <div class="status-bar">
+        <div class="stat-pair">
+          <span class="stat-label">DPS</span>
+          <div class="stat-values">
+            <div class="val-group text-dps-out"><span class="dir-icon">↗</span><span id="out-dps"
+                class="value">0.0</span></div>
+            <div class="stat-divider"></div>
+            <div class="val-group text-dps-in"><span id="in-dps" class="value">0.0</span><span class="dir-icon">↙</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-pair">
+          <span class="stat-label">REP</span>
+          <div class="stat-values">
+            <div class="val-group text-rep-out"><span class="dir-icon">↗</span><span id="out-hps"
+                class="value">0.0</span></div>
+            <div class="stat-divider"></div>
+            <div class="val-group text-rep-in"><span id="in-hps" class="value">0.0</span><span class="dir-icon">↙</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-pair">
+          <span class="stat-label">CAP</span>
+          <div class="stat-values">
+            <div class="val-group text-cap-out"><span class="dir-icon">↗</span><span id="out-cap"
+                class="value">0.0</span></div>
+            <div class="stat-divider"></div>
+            <div class="val-group text-cap-in"><span id="in-cap" class="value">0.0</span><span class="dir-icon">↙</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-pair">
+          <span class="stat-label">NEUT</span>
+          <div class="stat-values">
+            <div class="val-group text-neut-out"><span class="dir-icon">↗</span><span id="out-neut"
+                class="value">0.0</span></div>
+            <div class="stat-divider"></div>
+            <div class="val-group text-neut-in"><span id="in-neut" class="value">0.0</span><span
+                class="dir-icon">↙</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="combat-breakdown"></div>
+    </div>
+  </div>
+  <script src="components.js"></script>
+  <script src="main.js"></script>
+</body>
+
+</html>
