@@ -29,6 +29,7 @@ AbyssWatcher is a high-performance DPS Meter for EVE Online, built as a modern d
   - **Stack**: React 18, TypeScript, Vite 7 (configured at root).
   - **State Management**: React Hooks (`useState`, `useEffect`) avoiding full DOM repaints.
   - **Communication**: Communicates with Rust via `@tauri-apps/api` (Commands & Events).
+  - **Types**: `ui/src/types.ts` (Single source of truth for TypeScript interfaces mirroring Rust core).
   - **Entry Point**: `ui/src/main.tsx` → `ui/src/App.tsx`
   - **Routing**: `App.tsx` automatically detects the window label (`main` or `replay`) to render:
     - **Live Overlay** (`MainApp`): The transparent DPS tracking HUD.
@@ -108,6 +109,7 @@ AbyssWatcher follows the **Unified Zero-Container HUD** design language, priorit
 ## Coding Guidelines
 
 - **Domain vs UI Separation**: Keep all parsing and math in `src/core`. `src/app.rs` should only handle "wiring" – passing data from Core to Frontend.
+- **Type Synchronization**: `ui/src/types.ts` must be manually kept in sync with `src/core/model.rs` and `src/core/config.rs`. Always update the TypeScript mirror when changing backend data structures.
 - **Performance**:
   - Use `std::time::Duration` for all internal time math.
   - Avoid heavy computation on the main thread; use `tokio` tasks for log IO.
