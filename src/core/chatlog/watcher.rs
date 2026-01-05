@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 
 use super::parser::{ChatlogParser, LocationChange};
-use crate::core::discovery::{self, LogType};
+use crate::core::discovery;
 use crate::core::log_io::LogTailer;
 
 /// Watches a single Local chat log file for location changes.

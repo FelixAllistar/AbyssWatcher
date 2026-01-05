@@ -20,11 +20,11 @@ interface ReplayControlsProps {
 /** Get color for bookmark type */
 const getBookmarkColor = (type: string): string => {
     switch (type) {
-        case 'RunStart': return 'var(--accent-green)';
-        case 'RunEnd': return 'var(--accent-red)';
-        case 'RoomStart': return 'var(--accent-blue)';
-        case 'RoomEnd': return 'var(--accent-blue)';
-        case 'Highlight': return 'var(--accent-yellow, #ffcc00)';
+        case 'RUN_START': return 'var(--accent-green)';
+        case 'RUN_END': return 'var(--accent-red)';
+        case 'ROOM_START': return 'var(--accent-blue)';
+        case 'ROOM_END': return 'var(--accent-blue)';
+        case 'HIGHLIGHT': return 'var(--accent-yellow, #ffcc00)';
         default: return 'var(--text-main)';
     }
 };

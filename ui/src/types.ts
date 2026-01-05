@@ -51,12 +51,13 @@ export interface Settings {
 // ============================================
 
 /** Type of bookmark */
-export type BookmarkType = 'RunStart' | 'RunEnd' | 'RoomStart' | 'RoomEnd' | 'Highlight';
+/** Type of bookmark - matches values written to gamelog */
+export type BookmarkType = 'RUN_START' | 'RUN_END' | 'ROOM_START' | 'ROOM_END' | 'HIGHLIGHT';
 
 /** Room marker state - now just boolean */
 export type RoomMarkerState = 'Idle' | 'InRoom';
 
-/** A bookmark from the backend (simplified sidecar format) */
+/** A bookmark parsed from the gamelog file */
 export interface Bookmark {
     timestamp_secs: number;
     bookmark_type: string;

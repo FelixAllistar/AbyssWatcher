@@ -1,5 +1,4 @@
 use std::collections::{HashSet, HashMap};
-use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::sync::{Mutex, Arc, RwLock};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -17,13 +16,7 @@ use crate::core::{
 
 static REPLAY_SESSION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-/// Generate a stable character ID from the character name.
-/// This is used when gamelogs don't have character IDs in filenames.
-fn char_id_from_name(name: &str) -> u64 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    name.hash(&mut hasher);
-    hasher.finish()
-}
+
 
 
 
@@ -417,140 +410,56 @@ fn parse_bookmark_line(line: &str) -> Option<SimpleBookmarkResponse> {
 async fn detect_filaments(
     gamelog_path: PathBuf,
 ) -> Result<(), String> {
-    println!("detect_filaments called for {:?}", gamelog_path);
+    println!("Detecting filaments for {:?}", gamelog_path);
 
-    // 1. Extract Header to identify character and time
+    // 1. Identify character and session from gamelog header
     let header = discovery::extract_header(&gamelog_path, discovery::LogType::Gamelog)
         .map_err(|e| e.to_string())?
         .ok_or("Failed to parse gamelog header")?;
 
-    println!("Detected character: {} (ID: {:?})", header.character, header.character_id);
-
-    // 2. Find matching Chatlog
-    // We try to find the Local chatlog that corresponds to this session.
-    // Since session times might slightly differ, we look for a chatlog that started 
-    // around the same time or is the most recent one before the gamelog end.
-    // For simplicity, we look for a chatlog with the same character name/ID 
-    // and picking the one closest in time.
-    
+    // 2. Find matching Local chatlog
     let chatlog_dir = discovery::derive_chatlog_dir(header.path.parent().unwrap());
-    println!("Looking for chatlogs in {:?}", chatlog_dir);
-    
-    // We scan all local chatlogs for this character
     let mut relevant_logs = discovery::scan_logs_dir(&chatlog_dir, Some("Local"), discovery::LogType::Chatlog)
         .map_err(|e| e.to_string())?
         .into_iter()
         .filter(|h| h.character == header.character)
         .collect::<Vec<_>>();
 
-    // Sort by start time ascending
     relevant_logs.sort_by_key(|h| h.session_start);
 
-    // Find the chatlog that covers the gamelog session
-    // Gamelog start: T_g
-    // Chatlog start: T_c
-    // We want T_c roughly equal to T_g (within reasonable tolerance)
-    // Or just the one that was continuously active?
-    // Let's pick the one explicitly starting +/- 2 minutes of gamelog, 
-    // or if that fails, the one immediately preceding it.
-    
     let gamelog_start = header.session_start;
-    
     let best_match = relevant_logs.into_iter().rev().find(|h| {
-        // Chatlog must have started BEFORE or shortly AFTER gamelog
-        // Let's use a loose window: Chatlog started within 24h before gamelog?
-        // EVE daily downtime restarts logs.
-        // Usually they start at almost exact same second if logged in.
         if let Ok(diff) = gamelog_start.duration_since(h.session_start) {
-            // Chatlog started before Gamelog
-            diff.as_secs() < 86400 // Less than 24h diff
+            diff.as_secs() < 86400 
         } else if let Ok(diff) = h.session_start.duration_since(gamelog_start) {
-             // Chatlog started after Gamelog (maybe crash recovery?)
-             diff.as_secs() < 300 // 5 min tolerance
+             diff.as_secs() < 300 
         } else {
             false
         }
     });
 
     let chatlog_path = best_match.ok_or("No matching Local chatlog found for this session")?.path;
-    println!("Found matching chatlog: {:?}", chatlog_path);
 
     // 3. Scan Chatlog for Abyss Runs
-    // 3. Scan Chatlog for Abyss Runs
-    
-    // Check if file exists
-    if !chatlog_path.exists() {
-        return Err(format!("Chatlog path matches but file missing: {:?}", chatlog_path));
-    }
-
-    println!("Reading chatlog content...");
-    // Rust read_to_string expects UTF-8. discovery.rs handles reading headers with encoding check.
-    // We need to robustly read the whole file. 
-    // Let's assume standard UTF-8/Ascii for now or use the BOM check from discovery if needed.
-    // EVE logs are often UTF-16LE. We should reuse the read logic or be careful.
-    
-    // Let's try reading as UTF-8 first, if valid.
-    // If not, we might need a helper to read diverse encodings.
-    // For now, let's look at how discovery reads it.
-    // discovery::extract_header handles UTF-16LE. We should probably expose that read function.
-    // OR just try to run `strings` equivalent by filtering valid chars?
-    // Let's do a quick encoding check similar to discovery.
-    
-    let clean_content = {
-        use std::io::Read;
-        let mut f = std::fs::File::open(&chatlog_path).map_err(|e| e.to_string())?;
-        let mut buffer = Vec::new();
-        f.read_to_end(&mut buffer).map_err(|e| e.to_string())?;
-        
-        if buffer.len() >= 2 && buffer[0] == 0xFF && buffer[1] == 0xFE {
-            // UTF-16LE
-            let u16_units: Vec<u16> = buffer[2..]
-                .chunks_exact(2)
-                .map(|c| u16::from_le_bytes([c[0], c[1]]))
-                .collect();
-            String::from_utf16_lossy(&u16_units)
-        } else {
-            // Assume UTF-8 / ASCII
-            String::from_utf8_lossy(&buffer).to_string()
-        }
-    };
+    let clean_content = discovery::read_log_file(&chatlog_path).map_err(|e| e.to_string())?;
 
     use crate::core::chatlog::parser::{ChatlogParser, detect_abyss_runs};
     let parser = ChatlogParser::new();
     let changes = parser.parse_lines(&clean_content.lines().map(String::from).collect::<Vec<_>>());
     let runs = detect_abyss_runs(&changes);
 
-    println!("Detected {} Abyss runs in chatlog.", runs.len());
+    if runs.is_empty() {
+        return Ok(());
+    }
 
-    // 4. Append Match Bookmarks to Gamelog
-    // We only append if they don't already exist to avoid duplicates?
-    // Actually, inline_bookmarks just appends. Duplicates might be annoying.
-    // Ideally we check if they exist.
-    // For now, let's just append. The user pressed "Detect", so they want them.
-    
-    use crate::core::inline_bookmarks::{append_bookmark, BookmarkType};
-    use chrono::{DateTime, Utc};
-
-    // Helper to format timestamp exactly as it appears in log for consistency verification?
-    // No, inline_bookmarks generates its own timestamp string.
-    // Wait! inline_bookmarks::append_bookmark uses `Utc::now()` for the log line timestamp!
-    // That's WRONG for historical detection. We need to write the HISTORICAL timestamp.
-    // We need to modify `inline_bookmarks` to allow specific timestamp injection.
-    
-    // Ah, `inline_bookmarks` creates a new line like: [ TIMESTAMP ] (bookmark) ...
-    // If we simply call append_bookmark, it will put NOW's timestamp.
-    // In Replay, the bookmark time is derived from the parsed line timestamp.
-    // So if we write [ NOW ] (bookmark) RUN_START, the replay will see it at `NOW`.
-    // It will be WAY after the actual events.
-    
-    // FIX: We must manually construct the line with the HISTORICAL timestamp.
-    
+    // 4. Append bookmarks to gamelog with historical timestamps
     let mut f = std::fs::OpenOptions::new()
         .append(true)
         .open(&gamelog_path)
         .map_err(|e| e.to_string())?;
 
     use std::io::Write;
+    use chrono::{DateTime, Utc};
     
     let format_ts = |dur: Duration| -> String {
         let dt: DateTime<Utc> = DateTime::from(std::time::UNIX_EPOCH + dur);
@@ -559,13 +468,11 @@ async fn detect_filaments(
 
     let mut added_count = 0;
     for run in runs {
-        // Run Start
         let start_ts = format_ts(run.entry_time);
         let start_line = format!("[ {} ] (bookmark) RUN_START\n", start_ts);
         f.write_all(start_line.as_bytes()).map_err(|e| e.to_string())?;
         added_count += 1;
 
-        // Run End
         if let Some(exit_time) = run.exit_time {
             let end_ts = format_ts(exit_time);
             let end_line = format!("[ {} ] (bookmark) RUN_END\n", end_ts);
@@ -574,8 +481,7 @@ async fn detect_filaments(
         }
     }
     
-    println!("Appended {} bookmark lines to gamelog.", added_count);
-
+    println!("Appended {} run bookmarks to {:?}", added_count, gamelog_path);
     Ok(())
 }
 

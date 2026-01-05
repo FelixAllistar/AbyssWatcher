@@ -125,7 +125,7 @@ function ReplayWindow() {
             const bks = await invoke<Bookmark[]>('get_session_bookmarks', { gamelogPath: currentGamelogPath });
             setBookmarks(bks);
             console.log('Reloaded bookmarks:', bks);
-            alert(`Detected filaments. Found ${bks.filter(b => b.bookmark_type === 'RunStart').length} run(s).`);
+            alert(`Detected filaments. Found ${bks.filter(b => b.bookmark_type === 'RUN_START').length} run(s).`);
         } catch (e) {
             console.error('Detect filaments failed:', e);
             alert('Detect filaments failed: ' + e);

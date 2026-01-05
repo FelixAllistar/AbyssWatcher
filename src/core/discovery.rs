@@ -4,7 +4,7 @@
 //! both Gamelogs (combat) and Chatlogs (Local chat).
 
 use std::fs::{self, File};
-use std::io::{self, BufRead, BufReader, Read, Seek};
+use std::io::{self, Read, Seek};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -162,20 +162,41 @@ fn read_utf8_header(file: &mut File) -> io::Result<String> {
 
 /// Read header as UTF-16LE text
 fn read_utf16le_header(file: &mut File) -> io::Result<String> {
-    use io::Read;
-    // Read first 4KB which should be more than enough for header
-    let mut bytes = vec![0u8; 4096];
-    file.seek(io::SeekFrom::Start(2))?; // Skip BOM
-    let n = file.read(&mut bytes)?;
-    bytes.truncate(n);
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)?;
     
-    // Convert UTF-16LE to String
-    let u16_units: Vec<u16> = bytes
+    // Skip BOM if present
+    let data = if buffer.len() >= 2 && buffer[0] == 0xFF && buffer[1] == 0xFE {
+        &buffer[2..]
+    } else {
+        &buffer
+    };
+
+    let u16_units: Vec<u16> = data
         .chunks_exact(2)
-        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+        .map(|c| u16::from_le_bytes([c[0], c[1]]))
         .collect();
-    
     Ok(String::from_utf16_lossy(&u16_units))
+}
+
+/// Read an EVE log file, automatically detecting encoding (UTF-8 or UTF-16LE).
+pub fn read_log_file(path: &Path) -> io::Result<String> {
+    let mut f = File::open(path)?;
+    let mut buffer = Vec::new();
+    f.read_to_end(&mut buffer)?;
+    
+    if buffer.len() >= 2 && buffer[0] == 0xFF && buffer[1] == 0xFE {
+        // UTF-16LE
+        let u16_units: Vec<u16> = buffer[2..]
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        Ok(String::from_utf16_lossy(&u16_units))
+    } else {
+        // Assume UTF-8 / ASCII
+        String::from_utf8(buffer)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    }
 }
 
 /// Scan a directory for log files matching a pattern.
