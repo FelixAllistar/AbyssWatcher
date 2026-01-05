@@ -94,6 +94,7 @@ pub struct ReplayController {
     
     session_start_time: Duration,
     session_duration: Duration,
+    session_epoch_start: u64,
     
     current_sim_time: Duration,
     last_update_wall_time: SystemTime,
@@ -102,7 +103,27 @@ pub struct ReplayController {
 impl ReplayController {
     pub fn new(paths: Vec<(String, PathBuf)>) -> Option<Self> {
         let stream = MergedStream::new(paths.clone()).ok()?;
-        let start_time = stream.peek_time()?;
+        
+        // Calculate absolute epoch start (earliest session start)
+        let mut min_epoch = u64::MAX;
+        for source in &stream.sources {
+            if let Some(base) = source.parser.get_base_time() {
+                 let epoch = base.and_utc().timestamp() as u64;
+                 if epoch < min_epoch {
+                     min_epoch = epoch;
+                 }
+            }
+        }
+        
+        // If we found a valid session start, use it.
+        // If we didn't find any session headers, we can't really replay.
+        if min_epoch == u64::MAX {
+            eprintln!("ReplayController: No valid session start found in headers.");
+            return None;
+        }
+
+        // Try to peek first event time, OR default to 0 duration if no events
+        let start_time = stream.peek_time().unwrap_or(Duration::ZERO);
         
         let mut end_time = start_time;
         for (_, path) in &paths {
@@ -122,6 +143,7 @@ impl ReplayController {
             speed: 1.0,
             session_start_time: start_time,
             session_duration: end_time.saturating_sub(start_time),
+            session_epoch_start: min_epoch,
             current_sim_time: start_time,
             last_update_wall_time: SystemTime::now(),
         })
@@ -136,6 +158,12 @@ impl ReplayController {
 
     pub fn session_duration(&self) -> Duration {
         self.session_duration
+    }
+
+    pub fn start_time(&self) -> Duration {
+        // Return absolute epoch time + relative start offset
+        // This gives the exact time of the FIRST EVENT in the replay
+        Duration::from_secs(self.session_epoch_start) + self.session_start_time
     }
 
     pub fn set_state(&mut self, state: PlaybackState) {

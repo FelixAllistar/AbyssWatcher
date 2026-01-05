@@ -47,37 +47,24 @@ export interface Settings {
 }
 
 // ============================================
-// Bookmark Types (mirror src/core/bookmarks/model.rs)
+// Bookmark Types (mirror src/core/inline_bookmarks.rs)
 // ============================================
 
 /** Type of bookmark */
 export type BookmarkType = 'RunStart' | 'RunEnd' | 'RoomStart' | 'RoomEnd' | 'Highlight';
 
-/** Room marker state */
+/** Room marker state - now just boolean */
 export type RoomMarkerState = 'Idle' | 'InRoom';
 
-/** A bookmark from the backend */
+/** A bookmark from the backend (simplified sidecar format) */
 export interface Bookmark {
-    id: number;
-    run_id: number;
     timestamp_secs: number;
-    bookmark_type: BookmarkType;
+    bookmark_type: string;
     label?: string;
 }
 
-/** A run from the backend */
-export interface Run {
-    id: number;
-    character: string;
-    character_id: number;
-    start_time_secs: number;
-    end_time_secs?: number;
-    origin_location?: string;
-    bookmarks: Bookmark[];
+/** Room marker toggle response (simplified) */
+export interface RoomMarkerResponse {
+    room_open: boolean;
 }
 
-/** Room marker toggle response */
-export interface RoomMarkerResponse {
-    state: RoomMarkerState;
-    bookmark_id?: number;
-}

@@ -13,7 +13,7 @@ import './styles/main.css';
 import type { DpsUpdate, CharacterState, Settings, RoomMarkerState, RoomMarkerResponse } from './types';
 
 // Re-export types for other modules that import from App
-export type { DpsUpdate, CharacterState, CombatAction, TargetHit, Settings, Bookmark, Run, BookmarkType, RoomMarkerState } from './types';
+export type { DpsUpdate, CharacterState, CombatAction, TargetHit, Settings, Bookmark, BookmarkType, RoomMarkerState } from './types';
 
 import WindowFrame from './components/WindowFrame';
 
@@ -73,12 +73,20 @@ function MainApp() {
     init();
 
     // Subscribe to DPS updates
-    const unlisten = listen<DpsUpdate>('dps-update', (event) => {
+    const unlistenDps = listen<DpsUpdate>('dps-update', (event) => {
       setDpsData(event.payload);
     });
 
+    // Subscribe to Abyss exit events to auto-reset room marker
+    const unlistenAbyssExit = listen<{ character: string, location: string }>('abyss-exited', (event) => {
+      console.log(`${event.payload.character} exited Abyss to ${event.payload.location}`);
+      // Reset room marker state since run ended (auto-closed by backend)
+      setRoomMarkerState('Idle');
+    });
+
     return () => {
-      unlisten.then((fn) => fn());
+      unlistenDps.then((fn) => fn());
+      unlistenAbyssExit.then((fn) => fn());
     };
   }, []);
 
@@ -116,53 +124,58 @@ function MainApp() {
     }
   };
 
-  // Get the first tracked character for bookmark operations
-  const getActiveCharacter = () => {
-    const tracked = characters.filter(c => c.tracked);
-    if (tracked.length === 0) return null;
-    // For simplicity, use the first tracked character
-    // In a real multibox scenario, you might want a dropdown to select
-    return tracked[0];
+  // Get all tracked characters for bookmark operations
+  const getTrackedCharacters = () => {
+    return characters.filter(c => c.tracked);
   };
 
   const handleMarkHighlight = async () => {
-    const char = getActiveCharacter();
-    if (!char) {
+    const tracked = getTrackedCharacters();
+    if (tracked.length === 0) {
       console.warn('No character tracked, cannot create bookmark');
       return;
     }
-    try {
-      // Extract character_id from path (filename pattern: Local_DATE_TIME_ID.txt)
-      // For gamelogs, we'll use 0 as fallback since they don't have ID in name
-      await invoke('create_highlight_bookmark', {
-        characterId: 0,
-        characterName: char.character,
-        gamelogPath: char.path,
-        label: null
-      });
-      console.log('Highlight bookmark created');
-    } catch (e) {
-      console.error('Create bookmark failed:', e);
+
+    // Create bookmark for ALL tracked characters
+    for (const char of tracked) {
+      try {
+        await invoke('create_highlight_bookmark', {
+          gamelogPath: char.path,
+          label: null
+        });
+        console.log(`Highlight bookmark created for ${char.character}`);
+      } catch (e) {
+        console.error(`Create bookmark failed for ${char.character}:`, e);
+      }
     }
   };
 
   const handleToggleRoom = async () => {
-    const char = getActiveCharacter();
-    if (!char) {
+    const tracked = getTrackedCharacters();
+    if (tracked.length === 0) {
       console.warn('No character tracked, cannot toggle room marker');
       return;
     }
-    try {
-      const response = await invoke<RoomMarkerResponse>('toggle_room_marker', {
-        characterId: 0,
-        characterName: char.character,
-        gamelogPath: char.path
-      });
-      setRoomMarkerState(response.state);
-      console.log('Room marker state:', response.state);
-    } catch (e) {
-      console.error('Toggle room marker failed:', e);
+
+    // Current room state - will be toggled
+    const currentlyInRoom = roomMarkerState === 'InRoom';
+
+    // Toggle room marker for ALL tracked characters
+    let isOpen = false;
+    for (const char of tracked) {
+      try {
+        const response = await invoke<RoomMarkerResponse>('toggle_room_marker', {
+          gamelogPath: char.path,
+          currentlyInRoom: currentlyInRoom
+        });
+        // Use the last response state (they should all be the same)
+        isOpen = response.room_open;
+        console.log(`Room marker for ${char.character}:`, response.room_open);
+      } catch (e) {
+        console.error(`Toggle room marker failed for ${char.character}:`, e);
+      }
     }
+    setRoomMarkerState(isOpen ? 'InRoom' : 'Idle');
   };
 
   // Define controls to pass to the WindowFrame

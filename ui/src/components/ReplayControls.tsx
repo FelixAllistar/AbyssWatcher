@@ -43,8 +43,17 @@ const ReplayControls: FC<ReplayControlsProps> = ({
     sessionStartTime = 0
 }) => {
     // Calculate notch positions as percentages
+    // bookmarks have epoch timestamps (timestamp_secs), sessionStartTime is also epoch
+    // maxProgress is the duration in seconds from replay start
+    // We need: relativeTime = (bookmark epoch - session epoch) which gives seconds from session start
+    // Then percent = (relativeTime / duration) * 100
     const notches = bookmarks.map(b => {
         const relativeTime = b.timestamp_secs - sessionStartTime;
+
+        // Only show if relative time is positive and within duration
+        if (relativeTime < 0 || relativeTime > maxProgress) {
+            return null;
+        }
         const percent = maxProgress > 0 ? (relativeTime / maxProgress) * 100 : 0;
         return {
             type: b.bookmark_type,
@@ -52,7 +61,7 @@ const ReplayControls: FC<ReplayControlsProps> = ({
             label: b.label,
             timestamp: relativeTime
         };
-    }).filter(n => n.percent >= 0 && n.percent <= 100);
+    }).filter((n): n is NonNullable<typeof n> => n !== null);
 
     return (
         <div id="replay-controls" style={{

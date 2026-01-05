@@ -1,9 +1,9 @@
 pub mod analysis;
-pub mod bookmarks;
 pub mod chatlog;
 pub mod config;
 pub mod coordinator;
 pub mod discovery;
+pub mod inline_bookmarks;
 pub mod log_io;
 pub mod model;
 pub mod parser;

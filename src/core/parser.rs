@@ -19,6 +19,10 @@ impl LineParser {
     pub fn new() -> Self {
         Self { base_time: None }
     }
+
+    pub fn get_base_time(&self) -> Option<NaiveDateTime> {
+        self.base_time
+    }
 }
 
 impl Default for LineParser {

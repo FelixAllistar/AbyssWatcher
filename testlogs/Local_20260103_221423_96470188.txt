@@ -1,0 +1,17 @@
+
+
+
+
+        ---------------------------------------------------------------
+
+          Channel ID:      local
+          Channel Name:    Local
+          Listener:        Felix Allistar
+          Session started: 2026.01.03 22:14:23
+        ---------------------------------------------------------------
+
+﻿[ 2026.01.03 22:14:28 ] EVE System > Channel changed to Local : Torrinos
+﻿[ 2026.01.03 22:17:04 ] EVE System > Channel changed to Local : Unknown
+﻿[ 2026.01.03 22:31:07 ] EVE System > Channel changed to Local : Torrinos
+﻿[ 2026.01.03 22:41:27 ] EVE System > Channel changed to Local : Unknown
+﻿[ 2026.01.03 22:59:16 ] EVE System > Channel changed to Local : Torrinos

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{self, BufRead, BufReader, Seek, SeekFrom};
+use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use chrono::{NaiveDateTime, TimeZone, Utc};
@@ -9,27 +9,63 @@ use chrono::{NaiveDateTime, TimeZone, Utc};
 use super::model::CombatEvent;
 use super::parser;
 
+/// Detected encoding of a log file
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LogEncoding {
+    Utf8,
+    Utf16Le,
+}
+
 #[allow(dead_code)]
 pub struct LogTailer {
     file: File,
     position: u64,
     path: PathBuf,
+    encoding: LogEncoding,
 }
 
 impl LogTailer {
     pub fn open(path: impl AsRef<Path>) -> io::Result<Self> {
         let path_ref = path.as_ref();
-        let file = File::open(path_ref)?;
+        let mut file = File::open(path_ref)?;
         let metadata = file.metadata()?;
+        
+        // Detect encoding by checking for UTF-16LE BOM (FF FE)
+        let encoding = Self::detect_encoding(&mut file)?;
+        
         let position = metadata.len();
         Ok(Self {
             file,
             position,
             path: path_ref.to_path_buf(),
+            encoding,
         })
+    }
+    
+    /// Detect file encoding by checking for BOM
+    fn detect_encoding(file: &mut File) -> io::Result<LogEncoding> {
+        let mut bom = [0u8; 2];
+        file.seek(SeekFrom::Start(0))?;
+        
+        if file.read(&mut bom)? >= 2 {
+            // UTF-16LE BOM: FF FE
+            if bom[0] == 0xFF && bom[1] == 0xFE {
+                return Ok(LogEncoding::Utf16Le);
+            }
+        }
+        
+        file.seek(SeekFrom::Start(0))?;
+        Ok(LogEncoding::Utf8)
     }
 
     pub fn read_new_lines(&mut self) -> io::Result<Vec<String>> {
+        match self.encoding {
+            LogEncoding::Utf8 => self.read_utf8_lines(),
+            LogEncoding::Utf16Le => self.read_utf16le_lines(),
+        }
+    }
+    
+    fn read_utf8_lines(&mut self) -> io::Result<Vec<String>> {
         let mut lines = Vec::new();
 
         self.file.seek(SeekFrom::Start(self.position))?;
@@ -49,6 +85,43 @@ impl LogTailer {
 
         Ok(lines)
     }
+    
+    fn read_utf16le_lines(&mut self) -> io::Result<Vec<String>> {
+        let mut lines = Vec::new();
+        
+        self.file.seek(SeekFrom::Start(self.position))?;
+        
+        // Read all remaining bytes
+        let mut bytes = Vec::new();
+        self.file.read_to_end(&mut bytes)?;
+        
+        if bytes.is_empty() {
+            return Ok(lines);
+        }
+        
+        // Convert UTF-16LE to String
+        // Skip BOM if at start of file
+        let start = if self.position == 0 && bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE {
+            2
+        } else {
+            0
+        };
+        
+        let u16_units: Vec<u16> = bytes[start..]
+            .chunks_exact(2)
+            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+            .collect();
+        
+        let text = String::from_utf16_lossy(&u16_units);
+        
+        for line in text.lines() {
+            lines.push(line.to_string());
+        }
+        
+        self.position += bytes.len() as u64;
+        
+        Ok(lines)
+    }
 
     pub fn rewind(&mut self) -> io::Result<()> {
         self.position = 0;
@@ -59,6 +132,11 @@ impl LogTailer {
     #[allow(dead_code)]
     pub fn path(&self) -> &Path {
         &self.path
+    }
+    
+    #[allow(dead_code)]
+    pub fn encoding(&self) -> LogEncoding {
+        self.encoding
     }
 }
 

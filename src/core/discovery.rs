@@ -4,7 +4,7 @@
 //! both Gamelogs (combat) and Chatlogs (Local chat).
 
 use std::fs::{self, File};
-use std::io::{self, BufRead, BufReader};
+use std::io::{self, BufRead, BufReader, Read, Seek};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -40,17 +40,24 @@ pub struct LogHeader {
 }
 
 /// Extract character ID from filename patterns like:
-/// - `20250101_120000.txt` (Gamelog, no ID)
+/// - `20260103_221507_2114264203.txt` (Gamelog with ID)
 /// - `Local_20260103_174237_2112699440.txt` (Chatlog with ID)
 fn extract_character_id_from_filename(filename: &str) -> Option<u64> {
-    // Chatlog pattern: Local_YYYYMMDD_HHMMSS_CHARACTERID.txt
-    // The character ID is the last numeric segment before .txt
     let name = filename.strip_suffix(".txt").unwrap_or(filename);
     let parts: Vec<&str> = name.split('_').collect();
     
-    // For chatlog: ["Local", "20260103", "174237", "2112699440"]
+    // Chatlog pattern: ["Local", "20260103", "174237", "2112699440"] - 4 parts
     if parts.len() >= 4 && parts[0] == "Local" {
         return parts.last().and_then(|s| s.parse().ok());
+    }
+    
+    // Gamelog pattern: ["20260103", "221507", "2114264203"] - 3 parts
+    // The third segment is the character ID
+    if parts.len() >= 3 {
+        // Check if first part looks like a date (8 digits)
+        if parts[0].len() == 8 && parts[0].chars().all(|c| c.is_ascii_digit()) {
+            return parts.get(2).and_then(|s| s.parse().ok());
+        }
     }
     
     None
@@ -59,26 +66,33 @@ fn extract_character_id_from_filename(filename: &str) -> Option<u64> {
 /// Extract header information from an EVE log file.
 ///
 /// Handles both Gamelog and Chatlog formats:
-/// - Gamelog: "Listener:", "Session Started:"
-/// - Chatlog: "Listener:", "Session started:" (note: lowercase 's')
+/// - Gamelog: "Listener:", "Session Started:" (UTF-8)
+/// - Chatlog: "Listener:", "Session started:" (UTF-16LE, lowercase 's')
 pub fn extract_header(path: &Path, log_type: LogType) -> io::Result<Option<LogHeader>> {
-    let file = File::open(path)?;
+    let mut file = File::open(path)?;
     let metadata = fs::metadata(path)?;
-    let mut reader = BufReader::new(file);
-    let mut buffer = String::new();
+    
+    // Detect encoding by checking for UTF-16LE BOM (FF FE)
+    let mut bom = [0u8; 2];
+    let is_utf16le = if file.read(&mut bom)? >= 2 {
+        bom[0] == 0xFF && bom[1] == 0xFE
+    } else {
+        false
+    };
+    
+    // Read header lines based on encoding
+    let header_text = if is_utf16le {
+        read_utf16le_header(&mut file)?
+    } else {
+        file.seek(io::SeekFrom::Start(0))?;
+        read_utf8_header(&mut file)?
+    };
 
     let mut character = None;
     let mut session_start = None;
 
-    // Read up to 20 lines to find header info
-    for _ in 0..20 {
-        buffer.clear();
-        let bytes_read = reader.read_line(&mut buffer)?;
-        if bytes_read == 0 {
-            break;
-        }
-
-        let trimmed = buffer.trim();
+    for line in header_text.lines().take(20) {
+        let trimmed = line.trim();
 
         // Character name: "Listener: CharName"
         if let Some(rest) = trimmed.strip_prefix("Listener:") {
@@ -126,6 +140,42 @@ pub fn extract_header(path: &Path, log_type: LogType) -> io::Result<Option<LogHe
         file_size: metadata.len(),
         log_type,
     }))
+}
+
+/// Read header as UTF-8 text
+fn read_utf8_header(file: &mut File) -> io::Result<String> {
+    use io::BufRead;
+    let mut reader = io::BufReader::new(file);
+    let mut result = String::new();
+    let mut buffer = String::new();
+    
+    for _ in 0..20 {
+        buffer.clear();
+        if reader.read_line(&mut buffer)? == 0 {
+            break;
+        }
+        result.push_str(&buffer);
+    }
+    
+    Ok(result)
+}
+
+/// Read header as UTF-16LE text
+fn read_utf16le_header(file: &mut File) -> io::Result<String> {
+    use io::Read;
+    // Read first 4KB which should be more than enough for header
+    let mut bytes = vec![0u8; 4096];
+    file.seek(io::SeekFrom::Start(2))?; // Skip BOM
+    let n = file.read(&mut bytes)?;
+    bytes.truncate(n);
+    
+    // Convert UTF-16LE to String
+    let u16_units: Vec<u16> = bytes
+        .chunks_exact(2)
+        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+        .collect();
+    
+    Ok(String::from_utf16_lossy(&u16_units))
 }
 
 /// Scan a directory for log files matching a pattern.
@@ -249,17 +299,28 @@ mod tests {
 
     #[test]
     fn test_extract_character_id_from_filename() {
+        // Chatlog pattern
         assert_eq!(
             extract_character_id_from_filename("Local_20260103_174237_2112699440.txt"),
             Some(2112699440)
         );
+        
+        // Gamelog pattern with ID
+        assert_eq!(
+            extract_character_id_from_filename("20260103_221507_2114264203.txt"),
+            Some(2114264203)
+        );
+        
+        // Old gamelog without ID (only date + time)
         assert_eq!(
             extract_character_id_from_filename("20250101_120000.txt"),
             None
         );
+        
+        // Incomplete chatlog
         assert_eq!(
             extract_character_id_from_filename("Local_20260103_174237.txt"),
-            None // Not enough parts
+            None
         );
     }
 

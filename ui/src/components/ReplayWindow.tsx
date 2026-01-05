@@ -6,7 +6,7 @@ import CombatBreakdown from './CombatBreakdown';
 import ReplayControls from './ReplayControls';
 import LogBrowser from './LogBrowser';
 import RawLogViewer from './RawLogViewer';
-import type { DpsUpdate, CharacterState, Bookmark, Run } from '../types';
+import type { DpsUpdate, CharacterState, Bookmark } from '../types';
 import '../styles/replay.css';
 
 interface ReplayStatus {
@@ -60,26 +60,30 @@ function ReplayWindow() {
         };
     }, []);
 
+    interface ReplaySessionInfo {
+        duration: number;
+        start_time: number;
+    }
+
     const handleStartReplay = async (logs: [string, string][]) => {
         try {
-            const duration = await invoke<number>('start_replay', { logs });
-            setStatus(p => ({ ...p, duration }));
+            const info = await invoke<ReplaySessionInfo>('start_replay', { logs });
+            setStatus(p => ({ ...p, duration: info.duration }));
+            setSessionStartTime(info.start_time);
             setIsPlaying(true);
             setShowLogs(false);
 
             // Store the first log path for bookmark operations
             if (logs.length > 0) {
                 setCurrentGamelogPath(logs[0][1]);
+                console.log('Loading bookmarks for:', logs[0][1]);
                 // Try to load existing bookmarks
                 try {
                     const bks = await invoke<Bookmark[]>('get_session_bookmarks', { gamelogPath: logs[0][1] });
+                    console.log('Loaded bookmarks:', bks);
                     setBookmarks(bks);
-                    // Estimate session start from first bookmark or use 0
-                    const runStarts = bks.filter(b => b.bookmark_type === 'RunStart');
-                    if (runStarts.length > 0) {
-                        setSessionStartTime(runStarts[0].timestamp_secs);
-                    }
-                } catch {
+                } catch (err) {
+                    console.error('Failed to load bookmarks:', err);
                     setBookmarks([]);
                 }
             }
@@ -115,12 +119,13 @@ function ReplayWindow() {
             return;
         }
         try {
-            const runs = await invoke<Run[]>('detect_filaments', { gamelogPath: currentGamelogPath });
-            console.log('Detected runs:', runs);
-            // Flatten bookmarks from all runs
-            const allBookmarks = runs.flatMap(r => r.bookmarks);
-            setBookmarks(prev => [...prev, ...allBookmarks]);
-            alert(`Detected ${runs.length} Abyss run(s)`);
+            // Trigger filament detection
+            await invoke('detect_filaments', { gamelogPath: currentGamelogPath });
+            // Reload bookmarks from gamelog
+            const bks = await invoke<Bookmark[]>('get_session_bookmarks', { gamelogPath: currentGamelogPath });
+            setBookmarks(bks);
+            console.log('Reloaded bookmarks:', bks);
+            alert(`Detected filaments. Found ${bks.filter(b => b.bookmark_type === 'RunStart').length} run(s).`);
         } catch (e) {
             console.error('Detect filaments failed:', e);
             alert('Detect filaments failed: ' + e);

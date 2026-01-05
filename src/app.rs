@@ -1,4 +1,5 @@
 use std::collections::{HashSet, HashMap};
+use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::sync::{Mutex, Arc, RwLock};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -11,12 +12,18 @@ use crate::core::{
     config::{ConfigManager, Settings}, 
     replay_engine, 
     state::EngineState,
-    bookmarks::{model::{BookmarkType, RoomMarkerState, Run, Bookmark}, store::BookmarkStore},
-    chatlog::parser::{ChatlogParser, detect_abyss_runs},
     discovery,
 };
 
 static REPLAY_SESSION_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Generate a stable character ID from the character name.
+/// This is used when gamelogs don't have character IDs in filenames.
+fn char_id_from_name(name: &str) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    name.hash(&mut hasher);
+    hasher.finish()
+}
 
 
 
@@ -36,7 +43,6 @@ struct AppState {
     config_manager: ConfigManager,
     loop_tx: mpsc::Sender<LoopCommand>,
     replay: Arc<RwLock<Option<ReplaySession>>>,
-    bookmark_store: Mutex<BookmarkStore>,
 }
 
 #[tauri::command]
@@ -71,11 +77,18 @@ async fn get_logs_by_character(path: Option<PathBuf>, state: State<'_, AppState>
     Ok(groups)
 }
 
+#[derive(serde::Serialize)]
+struct ReplaySessionInfo {
+    duration: u64,
+    start_time: u64,
+}
+
 #[tauri::command]
-async fn start_replay(logs: Vec<(String, PathBuf)>, state: State<'_, AppState>, app: tauri::AppHandle) -> Result<u64, String> {
+async fn start_replay(logs: Vec<(String, PathBuf)>, state: State<'_, AppState>, app: tauri::AppHandle) -> Result<ReplaySessionInfo, String> {
     println!("Starting replay with {} logs...", logs.len());
     let controller = replay_engine::ReplayController::new(logs).ok_or("Failed to initialize replay controller")?;
     let duration = controller.session_duration().as_secs();
+    let start_time = controller.start_time().as_secs();
     
     let session_id = REPLAY_SESSION_COUNTER.fetch_add(1, Ordering::SeqCst) + 1;
 
@@ -150,7 +163,10 @@ async fn start_replay(logs: Vec<(String, PathBuf)>, state: State<'_, AppState>, 
         }
     });
 
-    Ok(duration)
+    Ok(ReplaySessionInfo {
+        duration,
+        start_time,
+    })
 }
 
 #[tauri::command]
@@ -292,262 +308,275 @@ fn toggle_tracking(path: PathBuf, state: State<'_, AppState>) {
 }
 
 // ============================================
-// Bookmark Commands
+// Inline Bookmark Commands
 // ============================================
 
 /// Response for room marker toggle
 #[derive(serde::Serialize)]
-struct RoomMarkerResponse {
-    state: RoomMarkerState,
-    bookmark_id: Option<u64>,
+struct SimpleRoomResponse {
+    room_open: bool,
 }
 
-/// Serializable bookmark for frontend
+/// Bookmark for frontend
 #[derive(serde::Serialize)]
-struct BookmarkResponse {
-    id: u64,
-    run_id: u64,
+struct SimpleBookmarkResponse {
     timestamp_secs: u64,
     bookmark_type: String,
     label: Option<String>,
 }
 
-impl From<&Bookmark> for BookmarkResponse {
-    fn from(b: &Bookmark) -> Self {
-        Self {
-            id: b.id,
-            run_id: b.run_id,
-            timestamp_secs: b.timestamp.as_secs(),
-            bookmark_type: format!("{:?}", b.bookmark_type),
-            label: b.label.clone(),
-        }
-    }
-}
-
-/// Serializable run for frontend
-#[derive(serde::Serialize)]
-struct RunResponse {
-    id: u64,
-    character: String,
-    character_id: u64,
-    start_time_secs: u64,
-    end_time_secs: Option<u64>,
-    origin_location: Option<String>,
-    bookmarks: Vec<BookmarkResponse>,
-}
-
-impl From<&Run> for RunResponse {
-    fn from(r: &Run) -> Self {
-        Self {
-            id: r.id,
-            character: r.character.clone(),
-            character_id: r.character_id,
-            start_time_secs: r.start_time.as_secs(),
-            end_time_secs: r.end_time.map(|d| d.as_secs()),
-            origin_location: r.origin_location.clone(),
-            bookmarks: r.bookmarks.iter().map(BookmarkResponse::from).collect(),
-        }
-    }
-}
-
 #[tauri::command]
 async fn create_highlight_bookmark(
-    character_id: u64,
-    character_name: String,
     gamelog_path: PathBuf,
     label: Option<String>,
-    state: State<'_, AppState>,
-) -> Result<u64, String> {
-    let mut store = state.bookmark_store.lock().unwrap();
-    let bookmarks = store.get_mut(character_id, &character_name)
+) -> Result<(), String> {
+    use crate::core::inline_bookmarks;
+    inline_bookmarks::add_highlight(&gamelog_path, label.as_deref())
         .map_err(|e| e.to_string())?;
-    
-    // Get or create active run
-    let run = if let Some(run) = bookmarks.active_run_mut() {
-        run
-    } else {
-        let run_id = bookmarks.start_run(
-            gamelog_path,
-            None,
-            Duration::from_secs(std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs()),
-            None,
-        );
-        bookmarks.run_mut(run_id).unwrap()
-    };
-    
-    let timestamp = Duration::from_secs(
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
-    );
-    
-    let bookmark_id = run.add_bookmark(BookmarkType::Highlight, timestamp, label);
-    
-    // Save to disk
-    store.save(character_id).map_err(|e| e.to_string())?;
-    
-    Ok(bookmark_id)
+    println!("Added HIGHLIGHT bookmark to {:?}", gamelog_path);
+    Ok(())
 }
 
 #[tauri::command]
 async fn toggle_room_marker(
-    character_id: u64,
-    character_name: String,
     gamelog_path: PathBuf,
-    state: State<'_, AppState>,
-) -> Result<RoomMarkerResponse, String> {
-    let mut store = state.bookmark_store.lock().unwrap();
-    let bookmarks = store.get_mut(character_id, &character_name)
-        .map_err(|e| e.to_string())?;
+    currently_in_room: bool,
+) -> Result<SimpleRoomResponse, String> {
+    use crate::core::inline_bookmarks;
     
-    // Get or create active run
-    let run = if let Some(run) = bookmarks.active_run_mut() {
-        run
+    if currently_in_room {
+        // End room
+        inline_bookmarks::add_room_end(&gamelog_path).map_err(|e| e.to_string())?;
+        println!("Added ROOM_END to {:?}", gamelog_path);
+        Ok(SimpleRoomResponse { room_open: false })
     } else {
-        let run_id = bookmarks.start_run(
-            gamelog_path,
-            None,
-            Duration::from_secs(std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs()),
-            None,
-        );
-        bookmarks.run_mut(run_id).unwrap()
+        // Start room
+        inline_bookmarks::add_room_start(&gamelog_path).map_err(|e| e.to_string())?;
+        println!("Added ROOM_START to {:?}", gamelog_path);
+        Ok(SimpleRoomResponse { room_open: true })
+    }
+}
+
+#[tauri::command]
+async fn get_session_bookmarks(
+    gamelog_path: PathBuf,
+) -> Result<Vec<SimpleBookmarkResponse>, String> {
+    // Read gamelog and parse bookmark lines
+    use std::fs;
+    use std::io::{BufRead, BufReader};
+    
+    let file = fs::File::open(&gamelog_path).map_err(|e| e.to_string())?;
+    let reader = BufReader::new(file);
+    
+    let mut bookmarks = Vec::new();
+    
+    for line in reader.lines() {
+        let line = line.map_err(|e| e.to_string())?;
+        if let Some(bm) = parse_bookmark_line(&line) {
+            bookmarks.push(bm);
+        }
+    }
+    
+    Ok(bookmarks)
+}
+
+/// Parse a bookmark line like: [ 2026.01.04 03:56:49 ] (bookmark) TYPE: label
+fn parse_bookmark_line(line: &str) -> Option<SimpleBookmarkResponse> {
+    if !line.contains("(bookmark)") {
+        return None;
+    }
+    
+    // Extract timestamp from [ YYYY.MM.DD HH:MM:SS ]
+    let timestamp_start = line.find('[')? + 1;
+    let timestamp_end = line.find(']')?;
+    let timestamp_str = line[timestamp_start..timestamp_end].trim();
+    
+    // Parse to epoch seconds
+    use chrono::NaiveDateTime;
+    let naive = NaiveDateTime::parse_from_str(timestamp_str, "%Y.%m.%d %H:%M:%S").ok()?;
+    let timestamp_secs = naive.and_utc().timestamp() as u64;
+    
+    // Extract type and optional label after (bookmark)
+    let after_bookmark = line.split("(bookmark)").nth(1)?.trim();
+    let (bookmark_type, label) = if let Some(colon_pos) = after_bookmark.find(':') {
+        let btype = after_bookmark[..colon_pos].trim().to_string();
+        let lbl = after_bookmark[colon_pos + 1..].trim().to_string();
+        (btype, Some(lbl))
+    } else {
+        (after_bookmark.to_string(), None)
     };
     
-    let timestamp = Duration::from_secs(
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
-    );
-    
-    let (new_state, bookmark_id) = run.toggle_room_marker(timestamp);
-    
-    // Save to disk
-    store.save(character_id).map_err(|e| e.to_string())?;
-    
-    Ok(RoomMarkerResponse {
-        state: new_state,
-        bookmark_id,
+    Some(SimpleBookmarkResponse {
+        timestamp_secs,
+        bookmark_type,
+        label,
     })
 }
 
 #[tauri::command]
 async fn detect_filaments(
     gamelog_path: PathBuf,
-    state: State<'_, AppState>,
-) -> Result<Vec<RunResponse>, String> {
-    // Derive chatlog directory from gamelog path
-    let gamelog_dir = gamelog_path.parent()
-        .ok_or_else(|| "Invalid gamelog path".to_string())?;
-    let chatlog_dir = discovery::derive_chatlog_dir(gamelog_dir);
-    
-    if !chatlog_dir.exists() {
-        return Err(format!("Chatlog directory not found: {:?}", chatlog_dir));
-    }
-    
-    // Get character info from gamelog header
-    let header = discovery::extract_header(&gamelog_path, discovery::LogType::Gamelog)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Could not read gamelog header".to_string())?;
-    
-    let character_name = header.character.clone();
-    let character_id = header.character_id.unwrap_or(0);
-    
-    // Find corresponding Local chatlog
-    let chatlog_path = discovery::find_local_chatlog_by_name(&chatlog_dir, &character_name)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("No Local chatlog found for {}", character_name))?;
-    
-    // Read and parse chatlog
-    let lines = log_io::read_full_lines(&chatlog_path)
-        .map_err(|e| e.to_string())?;
-    
-    let parser = ChatlogParser::new();
-    let changes = parser.parse_lines(&lines);
-    let abyss_runs = detect_abyss_runs(&changes);
-    
-    // Store the detected runs
-    let mut store = state.bookmark_store.lock().unwrap();
-    let bookmarks = store.get_mut(character_id, &character_name)
-        .map_err(|e| e.to_string())?;
-    
-    let mut responses = Vec::new();
-    
-    for abyss_run in &abyss_runs {
-        // Check if we already have a run with this start time
-        let existing = bookmarks.runs.iter().any(|r| r.start_time == abyss_run.entry_time);
-        if existing {
-            continue;
-        }
-        
-        let run_id = bookmarks.start_run(
-            gamelog_path.clone(),
-            Some(chatlog_path.clone()),
-            abyss_run.entry_time,
-            abyss_run.origin_location.clone(),
-        );
-        
-        if let Some(run) = bookmarks.run_mut(run_id) {
-            // Add RunStart bookmark
-            run.add_bookmark(BookmarkType::RunStart, abyss_run.entry_time, None);
-            
-            // End the run if we have an exit time
-            if let Some(exit_time) = abyss_run.exit_time {
-                run.add_bookmark(BookmarkType::RunEnd, exit_time, None);
-                run.end(exit_time);
-            }
-            
-            responses.push(RunResponse::from(&*run));
-        }
-    }
-    
-    // Save
-    store.save(character_id).map_err(|e| e.to_string())?;
-    
-    Ok(responses)
-}
+) -> Result<(), String> {
+    println!("detect_filaments called for {:?}", gamelog_path);
 
-#[tauri::command]
-async fn get_session_bookmarks(
-    gamelog_path: PathBuf,
-    state: State<'_, AppState>,
-) -> Result<Vec<BookmarkResponse>, String> {
-    // Get character info from gamelog header
+    // 1. Extract Header to identify character and time
     let header = discovery::extract_header(&gamelog_path, discovery::LogType::Gamelog)
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Could not read gamelog header".to_string())?;
+        .ok_or("Failed to parse gamelog header")?;
+
+    println!("Detected character: {} (ID: {:?})", header.character, header.character_id);
+
+    // 2. Find matching Chatlog
+    // We try to find the Local chatlog that corresponds to this session.
+    // Since session times might slightly differ, we look for a chatlog that started 
+    // around the same time or is the most recent one before the gamelog end.
+    // For simplicity, we look for a chatlog with the same character name/ID 
+    // and picking the one closest in time.
     
-    let character_id = header.character_id.unwrap_or(0);
+    let chatlog_dir = discovery::derive_chatlog_dir(header.path.parent().unwrap());
+    println!("Looking for chatlogs in {:?}", chatlog_dir);
     
-    let store = state.bookmark_store.lock().unwrap();
-    let bookmarks = match store.get(character_id) {
-        Some(b) => b,
-        None => return Ok(Vec::new()),
+    // We scan all local chatlogs for this character
+    let mut relevant_logs = discovery::scan_logs_dir(&chatlog_dir, Some("Local"), discovery::LogType::Chatlog)
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .filter(|h| h.character == header.character)
+        .collect::<Vec<_>>();
+
+    // Sort by start time ascending
+    relevant_logs.sort_by_key(|h| h.session_start);
+
+    // Find the chatlog that covers the gamelog session
+    // Gamelog start: T_g
+    // Chatlog start: T_c
+    // We want T_c roughly equal to T_g (within reasonable tolerance)
+    // Or just the one that was continuously active?
+    // Let's pick the one explicitly starting +/- 2 minutes of gamelog, 
+    // or if that fails, the one immediately preceding it.
+    
+    let gamelog_start = header.session_start;
+    
+    let best_match = relevant_logs.into_iter().rev().find(|h| {
+        // Chatlog must have started BEFORE or shortly AFTER gamelog
+        // Let's use a loose window: Chatlog started within 24h before gamelog?
+        // EVE daily downtime restarts logs.
+        // Usually they start at almost exact same second if logged in.
+        if let Ok(diff) = gamelog_start.duration_since(h.session_start) {
+            // Chatlog started before Gamelog
+            diff.as_secs() < 86400 // Less than 24h diff
+        } else if let Ok(diff) = h.session_start.duration_since(gamelog_start) {
+             // Chatlog started after Gamelog (maybe crash recovery?)
+             diff.as_secs() < 300 // 5 min tolerance
+        } else {
+            false
+        }
+    });
+
+    let chatlog_path = best_match.ok_or("No matching Local chatlog found for this session")?.path;
+    println!("Found matching chatlog: {:?}", chatlog_path);
+
+    // 3. Scan Chatlog for Abyss Runs
+    // 3. Scan Chatlog for Abyss Runs
+    
+    // Check if file exists
+    if !chatlog_path.exists() {
+        return Err(format!("Chatlog path matches but file missing: {:?}", chatlog_path));
+    }
+
+    println!("Reading chatlog content...");
+    // Rust read_to_string expects UTF-8. discovery.rs handles reading headers with encoding check.
+    // We need to robustly read the whole file. 
+    // Let's assume standard UTF-8/Ascii for now or use the BOM check from discovery if needed.
+    // EVE logs are often UTF-16LE. We should reuse the read logic or be careful.
+    
+    // Let's try reading as UTF-8 first, if valid.
+    // If not, we might need a helper to read diverse encodings.
+    // For now, let's look at how discovery reads it.
+    // discovery::extract_header handles UTF-16LE. We should probably expose that read function.
+    // OR just try to run `strings` equivalent by filtering valid chars?
+    // Let's do a quick encoding check similar to discovery.
+    
+    let clean_content = {
+        use std::io::Read;
+        let mut f = std::fs::File::open(&chatlog_path).map_err(|e| e.to_string())?;
+        let mut buffer = Vec::new();
+        f.read_to_end(&mut buffer).map_err(|e| e.to_string())?;
+        
+        if buffer.len() >= 2 && buffer[0] == 0xFF && buffer[1] == 0xFE {
+            // UTF-16LE
+            let u16_units: Vec<u16> = buffer[2..]
+                .chunks_exact(2)
+                .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                .collect();
+            String::from_utf16_lossy(&u16_units)
+        } else {
+            // Assume UTF-8 / ASCII
+            String::from_utf8_lossy(&buffer).to_string()
+        }
     };
+
+    use crate::core::chatlog::parser::{ChatlogParser, detect_abyss_runs};
+    let parser = ChatlogParser::new();
+    let changes = parser.parse_lines(&clean_content.lines().map(String::from).collect::<Vec<_>>());
+    let runs = detect_abyss_runs(&changes);
+
+    println!("Detected {} Abyss runs in chatlog.", runs.len());
+
+    // 4. Append Match Bookmarks to Gamelog
+    // We only append if they don't already exist to avoid duplicates?
+    // Actually, inline_bookmarks just appends. Duplicates might be annoying.
+    // Ideally we check if they exist.
+    // For now, let's just append. The user pressed "Detect", so they want them.
     
-    // Find runs that match this gamelog path
-    let matching_runs: Vec<_> = bookmarks.runs.iter()
-        .filter(|r| r.gamelog_path == gamelog_path)
-        .collect();
+    use crate::core::inline_bookmarks::{append_bookmark, BookmarkType};
+    use chrono::{DateTime, Utc};
+
+    // Helper to format timestamp exactly as it appears in log for consistency verification?
+    // No, inline_bookmarks generates its own timestamp string.
+    // Wait! inline_bookmarks::append_bookmark uses `Utc::now()` for the log line timestamp!
+    // That's WRONG for historical detection. We need to write the HISTORICAL timestamp.
+    // We need to modify `inline_bookmarks` to allow specific timestamp injection.
     
-    let mut all_bookmarks = Vec::new();
-    for run in matching_runs {
-        for bookmark in &run.bookmarks {
-            all_bookmarks.push(BookmarkResponse::from(bookmark));
+    // Ah, `inline_bookmarks` creates a new line like: [ TIMESTAMP ] (bookmark) ...
+    // If we simply call append_bookmark, it will put NOW's timestamp.
+    // In Replay, the bookmark time is derived from the parsed line timestamp.
+    // So if we write [ NOW ] (bookmark) RUN_START, the replay will see it at `NOW`.
+    // It will be WAY after the actual events.
+    
+    // FIX: We must manually construct the line with the HISTORICAL timestamp.
+    
+    let mut f = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&gamelog_path)
+        .map_err(|e| e.to_string())?;
+
+    use std::io::Write;
+    
+    let format_ts = |dur: Duration| -> String {
+        let dt: DateTime<Utc> = DateTime::from(std::time::UNIX_EPOCH + dur);
+        dt.format("%Y.%m.%d %H:%M:%S").to_string()
+    };
+
+    let mut added_count = 0;
+    for run in runs {
+        // Run Start
+        let start_ts = format_ts(run.entry_time);
+        let start_line = format!("[ {} ] (bookmark) RUN_START\n", start_ts);
+        f.write_all(start_line.as_bytes()).map_err(|e| e.to_string())?;
+        added_count += 1;
+
+        // Run End
+        if let Some(exit_time) = run.exit_time {
+            let end_ts = format_ts(exit_time);
+            let end_line = format!("[ {} ] (bookmark) RUN_END\n", end_ts);
+            f.write_all(end_line.as_bytes()).map_err(|e| e.to_string())?;
+            added_count += 1;
         }
     }
     
-    // Sort by timestamp
-    all_bookmarks.sort_by_key(|b| b.timestamp_secs);
-    
-    Ok(all_bookmarks)
+    println!("Appended {} bookmark lines to gamelog.", added_count);
+
+    Ok(())
 }
 
 
@@ -575,17 +604,12 @@ pub fn run() {
             // Create a channel for communicating with the background loop
             let (tx, mut rx) = mpsc::channel(32);
 
-            // Initialize bookmark store with data directory
-            let data_dir = app.path().app_data_dir().unwrap_or(PathBuf::from("."));
-            let bookmark_store = BookmarkStore::new(data_dir);
-
             app.manage(AppState {
                 tracked_paths: Mutex::new(HashSet::new()),
                 settings: Mutex::new(settings),
                 config_manager,
                 loop_tx: tx,
                 replay: Arc::new(RwLock::new(None)),
-                bookmark_store: Mutex::new(bookmark_store),
             });
 
             if cfg!(debug_assertions) {
@@ -632,10 +656,49 @@ pub fn run() {
                     let dps_window = Duration::from_secs(current_settings.dps_window_seconds);
 
                     let output = coordinator.tick(&active_paths, dps_window);
+                    
+                    // Print coordinator logs for debugging
+                    for log_msg in &output.logs {
+                        println!("[Coordinator] {}", log_msg);
+                    }
 
                     // Emit DPS
                     if let Some(sample) = output.dps_sample {
                         let _ = handle.emit("dps-update", sample);
+                    }
+                    
+                    // Handle location changes for auto run management (append to gamelog)
+                    if !output.location_changes.is_empty() {
+                        use crate::core::inline_bookmarks;
+                        
+                        for loc_change in output.location_changes {
+                            if loc_change.change.is_abyss_entry() {
+                                // Entering Abyss - append RUN_START to gamelog
+                                if let Err(e) = inline_bookmarks::add_run_start(&loc_change.gamelog_path) {
+                                    println!("Error appending run start: {}", e);
+                                } else {
+                                    println!("{} entered the Abyss", loc_change.character_name);
+                                }
+                                
+                                // Emit event for frontend
+                                let _ = handle.emit("abyss-entered", serde_json::json!({
+                                    "character": loc_change.character_name
+                                }));
+                            } else {
+                                // Exiting Abyss - append RUN_END to gamelog
+                                if let Err(e) = inline_bookmarks::add_run_end(&loc_change.gamelog_path) {
+                                    println!("Error appending run end: {}", e);
+                                } else {
+                                    println!("{} exited the Abyss to {}", loc_change.character_name, loc_change.change.location);
+                                }
+                                
+                                // Emit event for frontend
+                                let _ = handle.emit("abyss-exited", serde_json::json!({
+                                    "character": loc_change.character_name,
+                                    "location": loc_change.change.location
+                                }));
+                            }
+                        }
                     }
 
                     tokio::time::sleep(Duration::from_millis(250)).await;

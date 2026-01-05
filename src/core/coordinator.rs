@@ -5,14 +5,29 @@ use std::time::{Duration, SystemTime};
 use super::model::DpsSample;
 use super::state::EngineState;
 use super::watcher::LogWatcher;
+use super::chatlog::watcher::ChatlogWatcher;
+use super::chatlog::parser::LocationChange;
+use super::discovery;
+
+/// A location change event with character context.
+#[derive(Debug, Clone)]
+pub struct CharacterLocationChange {
+    pub character_name: String,
+    pub character_id: u64,
+    pub gamelog_path: PathBuf,
+    pub change: LocationChange,
+}
 
 pub struct CoordinatorOutput {
     pub dps_sample: Option<DpsSample>,
     pub logs: Vec<String>,
+    /// Location changes detected from Local chat logs
+    pub location_changes: Vec<CharacterLocationChange>,
 }
 
 pub struct Coordinator {
     watcher: LogWatcher,
+    chatlog_watcher: ChatlogWatcher,
     engine: EngineState,
     log_dir: PathBuf,
     
@@ -20,27 +35,32 @@ pub struct Coordinator {
     last_event_timestamp: Option<Duration>,
     last_event_wallclock: Option<SystemTime>,
     current_tracked_set: HashSet<PathBuf>,
+    
+    /// Maps gamelog path -> (character_name, character_id) for chatlog tracking
+    tracked_characters: std::collections::HashMap<PathBuf, (String, u64)>,
 }
 
 impl Coordinator {
     pub fn new(log_dir: PathBuf) -> Self {
         Self {
             watcher: LogWatcher::new(),
+            chatlog_watcher: ChatlogWatcher::new(),
             engine: EngineState::new(),
             log_dir,
             last_event_timestamp: None,
             last_event_wallclock: None,
             current_tracked_set: HashSet::new(),
+            tracked_characters: std::collections::HashMap::new(),
         }
     }
 
     pub fn tick(&mut self, active_paths: &HashSet<PathBuf>, dps_window: Duration) -> CoordinatorOutput {
         let mut logs = Vec::new();
+        let mut location_changes = Vec::new();
 
         // 1. Update Tracked Paths
         if *active_paths != self.current_tracked_set {
-            // If any path was removed, we reset the engine state entirely (as per original logic)
-            // Original logic: "let removed = current_tracked_set.difference(&active_paths).next().is_some(); if removed { engine = ... }"
+            // If any path was removed, we reset the engine state entirely
             let removed = self.current_tracked_set.difference(active_paths).next().is_some();
             if removed {
                 self.engine = EngineState::new();
@@ -50,10 +70,14 @@ impl Coordinator {
 
             let msgs = self.watcher.update_active_paths(active_paths, &self.log_dir);
             logs.extend(msgs);
+            
+            // Start/stop chatlog tracking for each character
+            self.update_chatlog_tracking(active_paths, &mut logs);
+            
             self.current_tracked_set = active_paths.clone();
         }
 
-        // 2. Poll Events
+        // 2. Poll Combat Events
         let (new_events, poll_msgs) = self.watcher.read_events();
         logs.extend(poll_msgs);
 
@@ -69,11 +93,26 @@ impl Coordinator {
             self.last_event_wallclock = Some(now_wallclock);
         }
 
-        // 3. Compute DPS
-        // Calculate the "simulation time" end point
+        // 3. Poll Location Changes from Chatlogs
+        let all_changes = self.chatlog_watcher.read_all_changes();
+        for (char_id, changes) in all_changes {
+            // Find the gamelog path for this character
+            if let Some((gamelog_path, (char_name, _))) = self.tracked_characters.iter().find(|(_, (_, id))| *id == char_id) {
+                for change in changes {
+                    logs.push(format!("{} moved to: {}", char_name, change.location));
+                    location_changes.push(CharacterLocationChange {
+                        character_name: char_name.clone(),
+                        character_id: char_id,
+                        gamelog_path: gamelog_path.clone(),
+                        change,
+                    });
+                }
+            }
+        }
+
+        // 4. Compute DPS
         let end_time = match (self.last_event_timestamp, self.last_event_wallclock) {
             (Some(timestamp), Some(seen_at)) => {
-                // If we have seen events, we project forward based on how much real time passed since the last event
                 if let Ok(elapsed) = SystemTime::now().duration_since(seen_at) {
                     timestamp + elapsed
                 } else {
@@ -90,6 +129,63 @@ impl Coordinator {
         CoordinatorOutput {
             dps_sample,
             logs,
+            location_changes,
+        }
+    }
+
+    /// Update chatlog tracking based on active gamelog paths
+    fn update_chatlog_tracking(&mut self, active_paths: &HashSet<PathBuf>, logs: &mut Vec<String>) {
+        // Derive chatlog dir from log_dir (gamelog dir)
+        let chatlog_dir = discovery::derive_chatlog_dir(&self.log_dir);
+        
+        if !chatlog_dir.exists() {
+            return;
+        }
+        
+        // Track new characters
+        for gamelog_path in active_paths {
+            if self.tracked_characters.contains_key(gamelog_path) {
+                continue;
+            }
+            
+            // Extract character info from gamelog header
+            if let Ok(Some(header)) = discovery::extract_header(gamelog_path, discovery::LogType::Gamelog) {
+                let char_id = header.character_id.unwrap_or_else(|| {
+                    // Fallback to hash if no ID in filename
+                    use std::hash::{Hash, Hasher};
+                    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                    header.character.hash(&mut hasher);
+                    hasher.finish()
+                });
+                
+                // Start tracking chatlog
+                match self.chatlog_watcher.start_tracking(&chatlog_dir, &header.character, char_id) {
+                    Ok(true) => {
+                        logs.push(format!("Started chatlog tracking for {}", header.character));
+                        self.tracked_characters.insert(gamelog_path.clone(), (header.character.clone(), char_id));
+                    }
+                    Ok(false) => {
+                        // No chatlog found, still track the character for manual bookmarks
+                        self.tracked_characters.insert(gamelog_path.clone(), (header.character.clone(), char_id));
+                    }
+                    Err(e) => {
+                        logs.push(format!("Failed to start chatlog for {}: {}", header.character, e));
+                    }
+                }
+            }
+        }
+        
+        // Stop tracking removed characters
+        let to_remove: Vec<_> = self.tracked_characters.keys()
+            .filter(|p| !active_paths.contains(*p))
+            .cloned()
+            .collect();
+            
+        for path in to_remove {
+            if let Some((name, char_id)) = self.tracked_characters.remove(&path) {
+                self.chatlog_watcher.stop_tracking(char_id);
+                logs.push(format!("Stopped chatlog tracking for {}", name));
+            }
         }
     }
 
@@ -98,6 +194,11 @@ impl Coordinator {
         self.last_event_timestamp = None;
         self.last_event_wallclock = None;
         self.watcher.rewind_all();
+    }
+    
+    /// Get character info for a tracked gamelog path
+    pub fn get_character_info(&self, gamelog_path: &PathBuf) -> Option<(String, u64)> {
+        self.tracked_characters.get(gamelog_path).cloned()
     }
 }
 
@@ -111,7 +212,7 @@ mod tests {
     #[test]
     fn test_coordinator_flow() {
         let dir = tempdir().unwrap();
-        let log_path = dir.path().join("20250101_120000.txt");
+        let log_path = dir.path().join("20250101_120000_12345.txt");
         
         let mut file = File::create(&log_path).unwrap();
         writeln!(file, "------------------------------------------------------------").unwrap();
@@ -135,7 +236,6 @@ mod tests {
 
         // Tick 2: Read event
         let output = coord.tick(&active_paths, Duration::from_secs(5));
-        // assert!(output.logs.iter().any(|m| m.contains("Read 1 new events")));
         
         let sample = output.dps_sample.unwrap();
         assert!(sample.outgoing_dps > 0.0);
