@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use super::tracker::TrackedGamelog;
+use super::tracker::{TrackedGamelog, TrackerReadResult};
 use super::log_io;
-use super::model::CombatEvent;
+use super::model::{CombatEvent, NotifyEvent};
 
 pub struct LogWatcher {
     trackers: HashMap<PathBuf, TrackedGamelog>,
@@ -67,16 +67,20 @@ impl LogWatcher {
     }
 
     /// Polls all active trackers for new events.
-    /// Returns collected events and any log messages (e.g., "Read X new events").
-    pub fn read_events(&mut self) -> (Vec<CombatEvent>, Vec<String>) {
-        let mut all_events = Vec::new();
+    /// Returns collected combat events, notify events, and any log messages.
+    pub fn read_events(&mut self) -> (Vec<CombatEvent>, Vec<NotifyEvent>, Vec<String>) {
+        let mut all_combat_events = Vec::new();
+        let mut all_notify_events = Vec::new();
         let mut messages = Vec::new();
 
         for tracker in self.trackers.values_mut() {
             match tracker.read_new_events() {
-                Ok(new_events) => {
-                    if !new_events.is_empty() {
-                        all_events.extend(new_events);
+                Ok(result) => {
+                    if !result.combat_events.is_empty() {
+                        all_combat_events.extend(result.combat_events);
+                    }
+                    if !result.notify_events.is_empty() {
+                        all_notify_events.extend(result.notify_events);
                     }
                 }
                 Err(e) => {
@@ -86,7 +90,7 @@ impl LogWatcher {
             }
         }
 
-        (all_events, messages)
+        (all_combat_events, all_notify_events, messages)
     }
 
     pub fn rewind_all(&mut self) {
@@ -128,8 +132,8 @@ mod tests {
         assert!(watcher.trackers.contains_key(&log_path));
 
         // 2. Read events (empty initially)
-        let (events, msgs) = watcher.read_events();
-        assert!(events.is_empty());
+        let (combat_events, _notify_events, msgs) = watcher.read_events();
+        assert!(combat_events.is_empty());
         assert!(msgs.is_empty());
 
         // 3. Write event
@@ -137,9 +141,9 @@ mod tests {
         file.sync_all().unwrap();
 
         // 4. Read events again
-        let (events, msgs) = watcher.read_events();
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].amount, 100.0);
+        let (combat_events, _notify_events, msgs) = watcher.read_events();
+        assert_eq!(combat_events.len(), 1);
+        assert_eq!(combat_events[0].amount, 100.0);
         assert!(msgs.is_empty());
 
         // 5. Remove path

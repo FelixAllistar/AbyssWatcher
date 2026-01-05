@@ -10,7 +10,7 @@ import ReplayWindow from './components/ReplayWindow';
 import './styles/theme.css';
 import './styles/common.css';
 import './styles/main.css';
-import type { DpsUpdate, CharacterState, Settings, RoomMarkerState, RoomMarkerResponse } from './types';
+import type { DpsUpdate, CharacterState, SettingsWithAlerts, RoomMarkerState, RoomMarkerResponse, AlertEvent } from './types';
 
 // Re-export types for other modules that import from App
 export type { DpsUpdate, CharacterState, CombatAction, TargetHit, Settings, Bookmark, BookmarkType, RoomMarkerState } from './types';
@@ -22,7 +22,21 @@ function MainApp() {
   const [characters, setCharacters] = useState<CharacterState[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [showCharacterSelector, setShowCharacterSelector] = useState(false);
-  const [settings, setSettings] = useState<Settings>({ gamelog_dir: '', dps_window_seconds: 5 });
+  const [settings, setSettings] = useState<SettingsWithAlerts>({
+    gamelog_dir: '',
+    dps_window_seconds: 5,
+    alert_settings: {
+      rules: {
+        EnvironmentalDamage: { enabled: true, sound: 'Default' },
+        FriendlyFire: { enabled: true, sound: 'Default' },
+        LogiTakingDamage: { enabled: true, sound: 'Default' },
+        NeutSensitiveNeuted: { enabled: true, sound: 'Default' },
+        CapacitorFailure: { enabled: true, sound: 'Default' },
+        LogiNeuted: { enabled: true, sound: 'Default' },
+      },
+      roles: { logi_characters: [], neut_sensitive_characters: [] },
+    },
+  });
   const [roomMarkerState, setRoomMarkerState] = useState<RoomMarkerState>('Idle');
 
   const charSelectorRef = useRef<HTMLDivElement>(null);
@@ -62,7 +76,7 @@ function MainApp() {
     // Load initial data
     const init = async () => {
       try {
-        const loadedSettings = await invoke<Settings>('get_settings');
+        const loadedSettings = await invoke<SettingsWithAlerts>('get_settings');
         setSettings(loadedSettings);
         const loadedChars = await invoke<CharacterState[]>('get_available_characters');
         setCharacters(loadedChars);
@@ -84,9 +98,23 @@ function MainApp() {
       setRoomMarkerState('Idle');
     });
 
+    // Subscribe to alert events for sound playback
+    const unlistenAlert = listen<AlertEvent>('alert-triggered', (event) => {
+      const { sound, message } = event.payload;
+      console.log('[ALERT]', message);
+
+      // Play sound if specified
+      if (sound) {
+        const audio = new Audio(`/sounds/${sound}.wav`);
+        audio.volume = 0.7;
+        audio.play().catch(err => console.warn('Failed to play alert sound:', err));
+      }
+    });
+
     return () => {
       unlistenDps.then((fn) => fn());
       unlistenAbyssExit.then((fn) => fn());
+      unlistenAlert.then((fn) => fn());
     };
   }, []);
 
@@ -103,7 +131,7 @@ function MainApp() {
     }
   };
 
-  const handleSaveSettings = async (newSettings: Settings) => {
+  const handleSaveSettings = async (newSettings: SettingsWithAlerts) => {
     try {
       await invoke('save_settings', { settings: newSettings });
       setSettings(newSettings);
@@ -231,6 +259,7 @@ function MainApp() {
           <div ref={settingsRef}>
             <SettingsModal
               settings={settings}
+              trackedCharacters={characters}
               onSave={handleSaveSettings}
               onCancel={() => setShowSettings(false)}
               onOpenReplay={handleOpenReplay}

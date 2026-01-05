@@ -12,6 +12,7 @@ use crate::core::{
     replay_engine, 
     state::EngineState,
     discovery,
+    alerts::engine::AlertEngine,
 };
 
 static REPLAY_SESSION_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -531,6 +532,7 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 let mut current_log_dir = initial_settings.gamelog_dir.clone();
                 let mut coordinator = coordinator::Coordinator::new(current_log_dir.clone());
+                let mut alert_engine = AlertEngine::new(initial_settings.alert_settings.clone());
                 println!("Background log watcher started. Monitoring: {:?}", current_log_dir);
 
                 loop {
@@ -560,6 +562,9 @@ pub fn run() {
 
                     // Hot-reload: DPS Window
                     let dps_window = Duration::from_secs(current_settings.dps_window_seconds);
+                    
+                    // Hot-reload: Alert config
+                    alert_engine.update_config(current_settings.alert_settings.clone());
 
                     let output = coordinator.tick(&active_paths, dps_window);
                     
@@ -571,6 +576,30 @@ pub fn run() {
                     // Emit DPS
                     if let Some(sample) = output.dps_sample {
                         let _ = handle.emit("dps-update", sample);
+                    }
+                    
+                    // Evaluate alerts and emit events
+                    if !output.new_combat_events.is_empty() || !output.new_notify_events.is_empty() {
+                        let char_names: std::collections::HashSet<String> = active_paths
+                            .iter()
+                            .filter_map(|p| coordinator.get_character_info(p))
+                            .map(|(name, _)| name)
+                            .collect();
+                        
+                        let alerts = alert_engine.evaluate(
+                            &output.new_combat_events,
+                            &output.new_notify_events,
+                            &char_names,
+                        );
+                        
+                        for alert in alerts {
+                            println!("[ALERT] {}", alert.message);
+                            let _ = handle.emit("alert-triggered", serde_json::json!({
+                                "rule_id": alert.rule_id,
+                                "message": alert.message,
+                                "sound": alert.sound.filename(alert.rule_id)
+                            }));
+                        }
                     }
                     
                     // Handle location changes for auto run management (append to gamelog)

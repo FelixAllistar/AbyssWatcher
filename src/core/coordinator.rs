@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
-use super::model::DpsSample;
+use super::model::{DpsSample, CombatEvent, NotifyEvent};
 use super::state::EngineState;
 use super::watcher::LogWatcher;
 use super::chatlog::watcher::ChatlogWatcher;
@@ -23,6 +23,10 @@ pub struct CoordinatorOutput {
     pub logs: Vec<String>,
     /// Location changes detected from Local chat logs
     pub location_changes: Vec<CharacterLocationChange>,
+    /// New combat events since last tick (for alert evaluation)
+    pub new_combat_events: Vec<CombatEvent>,
+    /// New notify events since last tick (for alert evaluation)
+    pub new_notify_events: Vec<NotifyEvent>,
 }
 
 pub struct Coordinator {
@@ -57,6 +61,8 @@ impl Coordinator {
     pub fn tick(&mut self, active_paths: &HashSet<PathBuf>, dps_window: Duration) -> CoordinatorOutput {
         let mut logs = Vec::new();
         let mut location_changes = Vec::new();
+        let mut new_combat_events = Vec::new();
+        let mut new_notify_events = Vec::new();
 
         // 1. Update Tracked Paths
         if *active_paths != self.current_tracked_set {
@@ -77,20 +83,24 @@ impl Coordinator {
             self.current_tracked_set = active_paths.clone();
         }
 
-        // 2. Poll Combat Events
-        let (new_events, poll_msgs) = self.watcher.read_events();
+        // 2. Poll Combat and Notify Events
+        let (combat_events, notify_events, poll_msgs) = self.watcher.read_events();
         logs.extend(poll_msgs);
+        
+        // Store for alert evaluation
+        new_notify_events = notify_events;
 
-        if !new_events.is_empty() {
+        if !combat_events.is_empty() {
             let now_wallclock = SystemTime::now();
-            for event in new_events {
+            for event in &combat_events {
                 self.last_event_timestamp = Some(
                     self.last_event_timestamp
                         .map_or(event.timestamp, |prev| prev.max(event.timestamp))
                 );
-                self.engine.push_event(event);
+                self.engine.push_event(event.clone());
             }
             self.last_event_wallclock = Some(now_wallclock);
+            new_combat_events = combat_events;
         }
 
         // 3. Poll Location Changes from Chatlogs
@@ -130,6 +140,8 @@ impl Coordinator {
             dps_sample,
             logs,
             location_changes,
+            new_combat_events,
+            new_notify_events,
         }
     }
 

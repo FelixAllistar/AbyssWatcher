@@ -1,21 +1,26 @@
 import { type FC, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-
-interface Settings {
-    gamelog_dir: string;
-    dps_window_seconds: number;
-}
+import type { SettingsWithAlerts, AlertEngineConfig, CharacterState } from '../types';
+import AlertSettings from './AlertSettings';
 
 interface SettingsModalProps {
-    settings: Settings;
-    onSave: (settings: Settings) => void;
+    settings: SettingsWithAlerts;
+    trackedCharacters: CharacterState[];
+    onSave: (settings: SettingsWithAlerts) => void;
     onCancel: () => void;
     onOpenReplay: () => void;
 }
 
-const SettingsModal: FC<SettingsModalProps> = ({ settings, onSave, onCancel, onOpenReplay }) => {
+const SettingsModal: FC<SettingsModalProps> = ({
+    settings,
+    trackedCharacters,
+    onSave,
+    onCancel,
+    onOpenReplay
+}) => {
     const [logDir, setLogDir] = useState(settings.gamelog_dir);
     const [dpsWindow, setDpsWindow] = useState(settings.dps_window_seconds);
+    const [alertConfig, setAlertConfig] = useState<AlertEngineConfig>(settings.alert_settings);
 
     const handleBrowse = async () => {
         try {
@@ -24,6 +29,14 @@ const SettingsModal: FC<SettingsModalProps> = ({ settings, onSave, onCancel, onO
         } catch (e) {
             console.error('Browse failed:', e);
         }
+    };
+
+    const handleSave = () => {
+        onSave({
+            gamelog_dir: logDir,
+            dps_window_seconds: dpsWindow,
+            alert_settings: alertConfig,
+        });
     };
 
     return (
@@ -45,15 +58,20 @@ const SettingsModal: FC<SettingsModalProps> = ({ settings, onSave, onCancel, onO
                     onChange={(e) => setDpsWindow(parseInt(e.target.value) || 5)}
                 />
             </div>
+
+            {/* Alert Settings */}
+            <AlertSettings
+                config={alertConfig}
+                trackedCharacters={trackedCharacters}
+                onChange={setAlertConfig}
+            />
+
             <div className="modal-actions">
                 <button className="icon-btn" style={{ color: '#ffeb3b' }} onClick={onOpenReplay}>
                     ↺ Replay
                 </button>
                 <button className="icon-btn" onClick={onCancel}>Cancel</button>
-                <button
-                    className="icon-btn primary-btn"
-                    onClick={() => onSave({ gamelog_dir: logDir, dps_window_seconds: dpsWindow })}
-                >
+                <button className="icon-btn primary-btn" onClick={handleSave}>
                     Save
                 </button>
             </div>

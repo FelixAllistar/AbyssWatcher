@@ -2,13 +2,17 @@ use chrono::NaiveDateTime;
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use super::model::{CombatEvent, EventType};
+use super::model::{CombatEvent, EventType, NotifyEvent};
 
 const SESSION_PREFIX: &str = "Session Started:";
 const TIMESTAMP_FMT: &str = "%Y.%m.%d %H:%M:%S";
 
 lazy_static! {
     static ref TAG_RE: Regex = Regex::new(r"<[^>]+>").unwrap();
+    // Pattern: "ModuleName requires X.X units of charge. The capacitor has only Y.Y units."
+    static ref CAP_FAIL_RE: Regex = Regex::new(
+        r"^(.+?) requires ([\d.]+) units of charge\. The capacitor has only ([\d.]+) units\.$"
+    ).unwrap();
 }
 
 pub struct LineParser {
@@ -115,6 +119,51 @@ impl LineParser {
         if self.base_time.is_none() {
             self.base_time = Some(timestamp);
         }
+    }
+
+    /// Parse a (notify) line for capacitor failure events.
+    /// Example: [ 2025.12.22 02:38:08 ] (notify) Gistii A-Type Small Remote Shield Booster requires 39.0 units of charge. The capacitor has only 6.2 units.
+    pub fn parse_notify_line(&mut self, line: &str, source: &str) -> Option<NotifyEvent> {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || !trimmed.contains("(notify)") {
+            return None;
+        }
+
+        // Handle session start if we haven't yet
+        if trimmed.starts_with(SESSION_PREFIX) {
+            self.parse_session_start(trimmed);
+            return None;
+        }
+
+        let timestamp = extract_timestamp(trimmed)?;
+        
+        // Extract body after (notify)
+        let body = trimmed.split("(notify)")
+            .nth(1)
+            .map(str::trim)?;
+        
+        // Clean HTML tags from body
+        let cleaned_body = strip_tags(body);
+        
+        // Try to match capacitor failure pattern
+        let caps = CAP_FAIL_RE.captures(&cleaned_body)?;
+        
+        let module_name = caps.get(1)?.as_str().to_string();
+        let required_cap: f32 = caps.get(2)?.as_str().parse().ok()?;
+        let available_cap: f32 = caps.get(3)?.as_str().parse().ok()?;
+        
+        self.ensure_base_time(timestamp);
+        
+        let base = *self.base_time.as_ref()?;
+        let duration = timestamp.signed_duration_since(base).to_std().ok()?;
+        
+        Some(NotifyEvent {
+            timestamp: duration,
+            character: source.to_string(),
+            module_name,
+            required_cap,
+            available_cap,
+        })
     }
 }
 
@@ -501,5 +550,44 @@ mod tests {
         assert_eq!(event.amount, 265.0);
         assert_eq!(event.target, "Habitation Module - Breeding Facility");
         assert_eq!(event.weapon, "Small Vorton Projector II");
+    }
+
+    #[test]
+    fn parses_capacitor_failure_notify() {
+        let mut parser = LineParser::new();
+        let _ = parser.parse_line("Session Started: 2025.12.22 02:38:00", "TestPilot");
+        
+        let line = "[ 2025.12.22 02:38:08 ] (notify) Gistii A-Type Small Remote Shield Booster requires 39.0 units of charge. The capacitor has only 6.2 units.";
+        let event = parser.parse_notify_line(line, "TestPilot").expect("should parse capacitor failure");
+        
+        assert_eq!(event.module_name, "Gistii A-Type Small Remote Shield Booster");
+        assert_eq!(event.required_cap, 39.0);
+        assert_eq!(event.available_cap, 6.2);
+        assert_eq!(event.character, "TestPilot");
+    }
+
+    #[test]
+    fn parses_afterburner_cap_failure() {
+        let mut parser = LineParser::new();
+        let _ = parser.parse_line("Session Started: 2025.12.22 02:38:00", "TestPilot");
+        
+        let line = "[ 2025.12.22 02:38:35 ] (notify) 1MN Y-S8 Compact Afterburner requires 5.0 units of charge. The capacitor has only 0.7 units.";
+        let event = parser.parse_notify_line(line, "TestPilot").expect("should parse afterburner cap failure");
+        
+        assert_eq!(event.module_name, "1MN Y-S8 Compact Afterburner");
+        assert_eq!(event.required_cap, 5.0);
+        assert_eq!(event.available_cap, 0.7);
+    }
+
+    #[test]
+    fn ignores_non_notify_lines() {
+        let mut parser = LineParser::new();
+        
+        // Combat line should return None
+        let line = "[ 2025.11.15 07:14:31 ] (combat) <b>523</b> to Starving Damavik";
+        assert!(parser.parse_notify_line(line, "Test").is_none());
+        
+        // Empty line should return None
+        assert!(parser.parse_notify_line("", "Test").is_none());
     }
 }

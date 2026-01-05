@@ -56,6 +56,17 @@ impl CombatEvent {
     }
 }
 
+/// A notify event from EVE logs - module activation failures, etc.
+/// Parsed from lines like: (notify) Module requires X units of charge. The capacitor has only Y units.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotifyEvent {
+    pub timestamp: Duration,
+    pub character: String,
+    pub module_name: String,
+    pub required_cap: f32,
+    pub available_cap: f32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DpsSample {
     pub time: Duration,

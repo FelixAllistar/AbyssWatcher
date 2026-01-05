@@ -1,3 +1,4 @@
+pub mod alerts;
 pub mod analysis;
 pub mod chatlog;
 pub mod config;

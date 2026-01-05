@@ -69,3 +69,48 @@ export interface RoomMarkerResponse {
     room_open: boolean;
 }
 
+// ============================================
+// Alert Types (mirror src/core/alerts/model.rs)
+// ============================================
+
+/** Unique identifier for hardcoded alert rules */
+export type AlertRuleId =
+    | 'EnvironmentalDamage'
+    | 'FriendlyFire'
+    | 'LogiTakingDamage'
+    | 'NeutSensitiveNeuted'
+    | 'CapacitorFailure'
+    | 'LogiNeuted';
+
+/** Sound options for alerts */
+export type AlertSound = 'Default' | 'Warning' | 'Critical' | 'None';
+
+/** Per-rule configuration */
+export interface AlertRuleConfig {
+    enabled: boolean;
+    sound: AlertSound;
+}
+
+/** Character role designations */
+export interface CharacterRoles {
+    logi_characters: string[];
+    neut_sensitive_characters: string[];
+}
+
+/** Alert engine configuration - part of Settings */
+export interface AlertEngineConfig {
+    rules: Record<AlertRuleId, AlertRuleConfig>;
+    roles: CharacterRoles;
+}
+
+/** Alert event from backend */
+export interface AlertEvent {
+    rule_id: AlertRuleId;
+    message: string;
+    sound: string | null;
+}
+
+/** Extended Settings with alert configuration */
+export interface SettingsWithAlerts extends Settings {
+    alert_settings: AlertEngineConfig;
+}

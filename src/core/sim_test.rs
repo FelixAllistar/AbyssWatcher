@@ -32,15 +32,15 @@ mod sim_tests {
         )
         .unwrap();
 
-        let events_a = tracker_a.read_new_events().unwrap();
-        let events_b = tracker_b.read_new_events().unwrap();
+        let result_a = tracker_a.read_new_events().unwrap();
+        let result_b = tracker_b.read_new_events().unwrap();
 
-        assert_eq!(events_a.len(), 1);
-        assert_eq!(events_a[0].character, "PilotA");
-        assert_eq!(events_a[0].amount, 100.0);
+        assert_eq!(result_a.combat_events.len(), 1);
+        assert_eq!(result_a.combat_events[0].character, "PilotA");
+        assert_eq!(result_a.combat_events[0].amount, 100.0);
 
-        assert_eq!(events_b.len(), 1);
-        assert_eq!(events_b[0].character, "PilotB");
-        assert_eq!(events_b[0].amount, 50.0);
+        assert_eq!(result_b.combat_events.len(), 1);
+        assert_eq!(result_b.combat_events[0].character, "PilotB");
+        assert_eq!(result_b.combat_events[0].amount, 50.0);
     }
 }

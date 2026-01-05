@@ -3,10 +3,17 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io;
 
+use super::alerts::engine::AlertEngineConfig;
+
+/// Application settings with alert configuration.
+/// NOTE: TypeScript mirror types are in ui/src/types.ts
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Settings {
     pub gamelog_dir: PathBuf,
     pub dps_window_seconds: u64,
+    /// Alert system configuration
+    #[serde(default)]
+    pub alert_settings: AlertEngineConfig,
 }
 
 impl Default for Settings {
@@ -20,6 +27,7 @@ impl Default for Settings {
         Self {
             gamelog_dir: default_path,
             dps_window_seconds: 5,
+            alert_settings: AlertEngineConfig::default_enabled(),
         }
     }
 }
@@ -72,6 +80,7 @@ mod tests {
         let new_settings = Settings {
             gamelog_dir: PathBuf::from("/tmp/logs"),
             dps_window_seconds: 10,
+            alert_settings: AlertEngineConfig::default_enabled(),
         };
 
         manager.save(&new_settings).unwrap();
