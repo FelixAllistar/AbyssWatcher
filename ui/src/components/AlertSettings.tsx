@@ -77,7 +77,7 @@ const AlertSettings: FC<AlertSettingsProps> = ({ config, trackedCharacters, onCh
     };
 
     const toggleRule = (ruleId: AlertRuleId) => {
-        const current = config.rules[ruleId];
+        const current = config.rules[ruleId] || { enabled: true, sound: 'Default' };
         onChange({
             ...config,
             rules: {

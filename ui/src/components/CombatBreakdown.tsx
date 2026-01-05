@@ -23,7 +23,7 @@ interface CharacterCardProps {
 }
 
 const CharacterCard: FC<CharacterCardProps> = ({ name, actions }) => {
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(true);
     const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
     const stats = useMemo(() => {
@@ -51,7 +51,6 @@ const CharacterCard: FC<CharacterCardProps> = ({ name, actions }) => {
         actions.forEach((act) => {
             if (g[act.action_type]) g[act.action_type].push(act);
         });
-        // Sort each group: outgoing first, then by value desc
         Object.values(g).forEach((arr) => {
             arr.sort((a, b) => {
                 if (a.incoming !== b.incoming) return a.incoming ? 1 : -1;
@@ -70,7 +69,6 @@ const CharacterCard: FC<CharacterCardProps> = ({ name, actions }) => {
         });
     };
 
-    // Track expanded weapons for multi-target display
     const [expandedWeapons, setExpandedWeapons] = useState<Set<string>>(new Set());
     const toggleWeapon = (key: string) => {
         setExpandedWeapons((prev) => {
@@ -140,7 +138,6 @@ const CharacterCard: FC<CharacterCardProps> = ({ name, actions }) => {
                                             const weaponKey = `${act.name}-${idx}`;
                                             const isWeaponExpanded = expandedWeapons.has(weaponKey);
 
-                                            // Multi-target: collapsible dropdown
                                             if (hasMultipleTargets) {
                                                 return (
                                                     <div className="action-row-group" key={weaponKey}>
