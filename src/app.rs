@@ -487,6 +487,59 @@ async fn detect_filaments(
 }
 
 
+// Embed all sound files directly into the binary
+static SOUND_BOUNDARY: &[u8] = include_bytes!("../ui/public/sounds/boundary.wav");
+static SOUND_FRIENDLY_FIRE: &[u8] = include_bytes!("../ui/public/sounds/friendly_fire.wav");
+static SOUND_LOGI_ATTACKED: &[u8] = include_bytes!("../ui/public/sounds/logi_attacked.wav");
+static SOUND_NEUT: &[u8] = include_bytes!("../ui/public/sounds/neut.wav");
+static SOUND_CAPACITOR_EMPTY: &[u8] = include_bytes!("../ui/public/sounds/capacitor_empty.wav");
+static SOUND_LOGI_NEUTED: &[u8] = include_bytes!("../ui/public/sounds/logi_neuted.wav");
+
+fn get_embedded_sound(filename: &str) -> Option<&'static [u8]> {
+    match filename {
+        "boundary.wav" => Some(SOUND_BOUNDARY),
+        "friendly_fire.wav" => Some(SOUND_FRIENDLY_FIRE),
+        "logi_attacked.wav" => Some(SOUND_LOGI_ATTACKED),
+        "neut.wav" => Some(SOUND_NEUT),
+        "capacitor_empty.wav" => Some(SOUND_CAPACITOR_EMPTY),
+        "logi_neuted.wav" => Some(SOUND_LOGI_NEUTED),
+        _ => None,
+    }
+}
+
+#[tauri::command]
+fn play_alert_sound(filename: String) -> Result<(), String> {
+    std::thread::spawn(move || {
+        use std::io::Cursor;
+        use rodio::{Decoder, Sink, OutputStreamBuilder};
+        
+        let Some(sound_data) = get_embedded_sound(&filename) else {
+            println!("[AUDIO] Unknown sound file: {}", filename);
+            return;
+        };
+
+        println!("[AUDIO] Playing embedded sound: {}", filename);
+
+        let cursor = Cursor::new(sound_data);
+        match Decoder::new(cursor) {
+            Ok(source) => {
+                match OutputStreamBuilder::open_default_stream() {
+                    Ok(stream_handle) => {
+                        let sink = Sink::connect_new(&stream_handle.mixer());
+                        sink.append(source);
+                        sink.set_volume(0.7);
+                        sink.sleep_until_end();
+                        println!("[AUDIO] Playback complete: {}", filename);
+                    },
+                    Err(e) => println!("[AUDIO] Failed to open audio stream: {}", e),
+                }
+            },
+            Err(e) => println!("[AUDIO] Error decoding {}: {}", filename, e),
+        }
+    });
+    Ok(())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::default().build())
@@ -520,13 +573,6 @@ pub fn run() {
                 replay: Arc::new(RwLock::new(None)),
             });
 
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
             app.handle().plugin(tauri_plugin_dialog::init())?;
 
             // Start the background log watcher
@@ -678,7 +724,10 @@ pub fn run() {
             create_highlight_bookmark,
             toggle_room_marker,
             detect_filaments,
-            get_session_bookmarks
+            detect_filaments,
+            get_session_bookmarks,
+            // Audio
+            play_alert_sound
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

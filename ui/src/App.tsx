@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { info, error } from '@tauri-apps/plugin-log';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import StatusBar from './components/StatusBar';
@@ -104,20 +105,11 @@ function MainApp() {
       console.log('[ALERT]', message);
 
       // Play sound if specified
+      // Play sound via backend (bypasses WebKitGTK limitations on Linux)
       if (sound) {
-        const soundPath = `/sounds/${sound}.wav`;
-        console.log(`[SOUND] Attempting to play: ${soundPath}`);
-        const audio = new Audio(soundPath);
-        audio.volume = 0.7;
-        audio.play().catch(err => {
-          console.error(`[SOUND ERROR] Failed to play ${soundPath}:`, err);
-          // Try alternative path if it fails
-          if (soundPath.startsWith('/')) {
-            const altPath = soundPath.substring(1);
-            console.log(`[SOUND] Retrying with alt path: ${altPath}`);
-            new Audio(altPath).play().catch(e => console.error(`[SOUND ERROR] Retry failed:`, e));
-          }
-        });
+        info(`[SOUND] Requesting backend playback: ${sound}.wav`);
+        invoke('play_alert_sound', { filename: `${sound}.wav` })
+          .catch(err => error(`[SOUND ERROR] Backend playback failed: ${err}`));
       }
     });
 

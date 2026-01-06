@@ -19,6 +19,7 @@ log = "0.4"
 tauri = { version = "2.2.4", features = [] }
 tauri-plugin-log = "2.0.0-rc"
 tauri-plugin-dialog = "2.4.2"
+rodio = "0.21.1"
 
 [lib]
 name = "abyss_watcher"

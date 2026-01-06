@@ -99,6 +99,8 @@ The alert system provides audio notifications for critical combat situations.
 
 **Configuration:** Stored in `settings.json` under `alert_settings` with role designations (logi, neut-sensitive).
 
+**Embedded Audio:** All alert sounds are compiled directly into the binary using `include_bytes!` (in `src/app.rs`). This ensures the single executable works from any location without external sound files. Source `.wav` files are located in `ui/public/sounds/`.
+
 ## Design & UX Principles: The "Unified Zero-Container HUD"
 
 AbyssWatcher follows the **Unified Zero-Container HUD** design language, prioritizing raw tactical data over UI "chrome".
@@ -169,7 +171,3 @@ AbyssWatcher follows the **Unified Zero-Container HUD** design language, priorit
   - **Dragging**: Uses manual `appWindow.startDragging()` on the custom title bar to ensure reliability across Linux distros.
   - **Resizing**: Implements 8 invisible edge/corner handles that call `appWindow.startResizeDragging()`.
   - **Compacted Header**: Controls (Chars, Settings) are integrated directly into the title bar to save vertical space.
-
-### 5. Tauri v2 Media CSP Fix
-- **Problem**: In production builds, the default Content Security Policy (CSP) in Tauri v2 blocks local audio playback from `asset:` or `self` sources.
-- **Fix**: Updated `tauri.conf.json` to include `media-src 'self' asset:` in the `security.csp` configuration. This ensures the Web Audio API can fetch `.wav` files from the bundled `dist` assets.
