@@ -110,7 +110,6 @@ impl AlertEngine {
         for rule_id in AlertRuleId::all() {
             // Skip disabled rules
             if !self.config.is_enabled(*rule_id) {
-                println!("[DEBUG] Rule {:?} is disabled, skipping", rule_id);
                 continue;
             }
 
@@ -118,15 +117,12 @@ impl AlertEngine {
             let rule_cooldown = self.config.get_cooldown(*rule_id);
             if let Some(last_fire) = self.cooldowns.get(rule_id) {
                 if now.duration_since(*last_fire) < rule_cooldown {
-                    println!("[DEBUG] Rule {:?} on cooldown ({:?}), skipping", rule_id, rule_cooldown);
                     continue;
                 }
             }
 
             // Evaluate trigger
-            println!("[DEBUG] Evaluating rule {:?}...", rule_id);
             if let Some(message) = evaluate_trigger(*rule_id, &ctx) {
-                println!("[DEBUG] Rule {:?} FIRED: {}", rule_id, message);
                 self.cooldowns.insert(*rule_id, now);
                 
                 // Get timestamp from the first relevant event
@@ -142,8 +138,6 @@ impl AlertEngine {
                     message,
                     sound: self.config.get_sound(*rule_id),
                 });
-            } else {
-                println!("[DEBUG] Rule {:?} did not match", rule_id);
             }
         }
 

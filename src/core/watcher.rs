@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use super::tracker::{TrackedGamelog, TrackerReadResult};
+use super::tracker::TrackedGamelog;
 use super::log_io;
 use super::model::{CombatEvent, NotifyEvent};
 

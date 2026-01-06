@@ -62,7 +62,7 @@ impl Coordinator {
         let mut logs = Vec::new();
         let mut location_changes = Vec::new();
         let mut new_combat_events = Vec::new();
-        let mut new_notify_events = Vec::new();
+        let new_notify_events;
 
         // 1. Update Tracked Paths
         if *active_paths != self.current_tracked_set {
@@ -172,12 +172,7 @@ impl Coordinator {
                 
                 // Start tracking chatlog
                 match self.chatlog_watcher.start_tracking(&chatlog_dir, &header.character, char_id) {
-                    Ok(true) => {
-                        logs.push(format!("Started chatlog tracking for {}", header.character));
-                        self.tracked_characters.insert(gamelog_path.clone(), (header.character.clone(), char_id));
-                    }
-                    Ok(false) => {
-                        // No chatlog found, still track the character for manual bookmarks
+                    Ok(_) => {
                         self.tracked_characters.insert(gamelog_path.clone(), (header.character.clone(), char_id));
                     }
                     Err(e) => {
@@ -194,9 +189,8 @@ impl Coordinator {
             .collect();
             
         for path in to_remove {
-            if let Some((name, char_id)) = self.tracked_characters.remove(&path) {
+            if let Some((_, char_id)) = self.tracked_characters.remove(&path) {
                 self.chatlog_watcher.stop_tracking(char_id);
-                logs.push(format!("Stopped chatlog tracking for {}", name));
             }
         }
     }

@@ -580,7 +580,6 @@ pub fn run() {
                 let mut current_log_dir = initial_settings.gamelog_dir.clone();
                 let mut coordinator = coordinator::Coordinator::new(current_log_dir.clone());
                 let mut alert_engine = AlertEngine::new(initial_settings.alert_settings.clone());
-                println!("Background log watcher started. Monitoring: {:?}", current_log_dir);
 
                 loop {
                     // Check for commands from the frontend
@@ -614,11 +613,6 @@ pub fn run() {
                     alert_engine.update_config(current_settings.alert_settings.clone());
 
                     let output = coordinator.tick(&active_paths, dps_window);
-                    
-                    // Print coordinator logs for debugging
-                    for log_msg in &output.logs {
-                        println!("[Coordinator] {}", log_msg);
-                    }
 
                     // Emit DPS
                     if let Some(sample) = output.dps_sample {
@@ -627,34 +621,17 @@ pub fn run() {
                     
                     // Evaluate alerts and emit events
                     if !output.new_combat_events.is_empty() || !output.new_notify_events.is_empty() {
-                        println!("[DEBUG] Processing {} combat events, {} notify events for alerts",
-                            output.new_combat_events.len(),
-                            output.new_notify_events.len());
-                        
                         let char_names: std::collections::HashSet<String> = active_paths
                             .iter()
                             .filter_map(|p| coordinator.get_character_info(p))
                             .map(|(name, _)| name)
                             .collect();
                         
-                        println!("[DEBUG] Tracked characters: {:?}", char_names);
-                        println!("[DEBUG] Alert config roles: logi={:?}, neut_sensitive={:?}",
-                            current_settings.alert_settings.roles.logi_characters,
-                            current_settings.alert_settings.roles.neut_sensitive_characters);
-                        
-                        // Debug: print first event
-                        if let Some(evt) = output.new_combat_events.first() {
-                            println!("[DEBUG] First combat event: type={:?}, incoming={}, source='{}', character='{}', target='{}'",
-                                evt.event_type, evt.incoming, evt.source, evt.character, evt.target);
-                        }
-                        
                         let alerts = alert_engine.evaluate(
                             &output.new_combat_events,
                             &output.new_notify_events,
                             &char_names,
                         );
-                        
-                        println!("[DEBUG] Alert engine returned {} alerts", alerts.len());
                         
                         for alert in alerts {
                             println!("[ALERT] {}", alert.message);
@@ -723,7 +700,6 @@ pub fn run() {
             // Bookmark commands
             create_highlight_bookmark,
             toggle_room_marker,
-            detect_filaments,
             detect_filaments,
             get_session_bookmarks,
             // Audio
