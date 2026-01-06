@@ -77,12 +77,34 @@ const AlertSettings: FC<AlertSettingsProps> = ({ config, trackedCharacters, onCh
     };
 
     const toggleRule = (ruleId: AlertRuleId) => {
-        const current = config.rules[ruleId] || { enabled: true, sound: 'Default' };
+        const current = config.rules[ruleId] || { enabled: false, sound: 'Default', cooldown_seconds: 3, ignore_vorton: true };
         onChange({
             ...config,
             rules: {
                 ...config.rules,
                 [ruleId]: { ...current, enabled: !current.enabled },
+            },
+        });
+    };
+
+    const updateCooldown = (ruleId: AlertRuleId, value: number) => {
+        const current = config.rules[ruleId] || { enabled: false, sound: 'Default', cooldown_seconds: 3, ignore_vorton: true };
+        onChange({
+            ...config,
+            rules: {
+                ...config.rules,
+                [ruleId]: { ...current, cooldown_seconds: Math.max(0, value) },
+            },
+        });
+    };
+
+    const toggleIgnoreVorton = () => {
+        const current = config.rules['FriendlyFire'] || { enabled: false, sound: 'Default', cooldown_seconds: 3, ignore_vorton: true };
+        onChange({
+            ...config,
+            rules: {
+                ...config.rules,
+                ['FriendlyFire']: { ...current, ignore_vorton: !current.ignore_vorton },
             },
         });
     };
@@ -137,19 +159,49 @@ const AlertSettings: FC<AlertSettingsProps> = ({ config, trackedCharacters, onCh
 
                 {ALERT_RULES.map(rule => {
                     const ruleConfig = config.rules[rule.id];
-                    const isEnabled = ruleConfig?.enabled ?? true;
+                    // Match backend: missing rules default to disabled (unwrap_or(false))
+                    const isEnabled = ruleConfig?.enabled ?? false;
+                    const cooldown = ruleConfig?.cooldown_seconds ?? 3;
+                    const ignoreVorton = ruleConfig?.ignore_vorton ?? true;
 
                     return (
                         <div key={rule.id} className="alert-rule">
-                            <label className="rule-toggle">
-                                <input
-                                    type="checkbox"
-                                    checked={isEnabled}
-                                    onChange={() => toggleRule(rule.id)}
-                                />
-                                <span className="rule-name">{rule.name}</span>
-                            </label>
+                            <div className="rule-header">
+                                <label className="rule-toggle">
+                                    <input
+                                        type="checkbox"
+                                        checked={isEnabled}
+                                        onChange={() => toggleRule(rule.id)}
+                                    />
+                                    <span className="rule-name">{rule.name}</span>
+                                </label>
+                                <div className="rule-cooldown">
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        max={300}
+                                        value={cooldown}
+                                        onChange={(e) => updateCooldown(rule.id, parseInt(e.target.value) || 0)}
+                                        className="cooldown-input"
+                                    />
+                                    <span className="cooldown-label">s</span>
+                                </div>
+                            </div>
                             <p className="rule-description">{rule.description}</p>
+
+                            {/* FriendlyFire-specific filter */}
+                            {rule.id === 'FriendlyFire' && isEnabled && (
+                                <div className="rule-filter">
+                                    <label className="filter-checkbox">
+                                        <input
+                                            type="checkbox"
+                                            checked={ignoreVorton}
+                                            onChange={toggleIgnoreVorton}
+                                        />
+                                        <span>Ignore Vorton weapons (chain lightning AOE)</span>
+                                    </label>
+                                </div>
+                            )}
                         </div>
                     );
                 })}

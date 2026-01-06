@@ -93,6 +93,20 @@ impl AlertSound {
 pub struct AlertRuleConfig {
     pub enabled: bool,
     pub sound: AlertSound,
+    /// Per-rule cooldown in seconds (default: 3)
+    #[serde(default = "default_cooldown")]
+    pub cooldown_seconds: u32,
+    /// For FriendlyFire: ignore damage from Vorton weapons (chain lightning AOE)
+    #[serde(default = "default_ignore_vorton")]
+    pub ignore_vorton: bool,
+}
+
+fn default_cooldown() -> u32 {
+    3
+}
+
+fn default_ignore_vorton() -> bool {
+    true
 }
 
 impl Default for AlertRuleConfig {
@@ -100,6 +114,8 @@ impl Default for AlertRuleConfig {
         Self {
             enabled: true,
             sound: AlertSound::Default,
+            cooldown_seconds: 3,
+            ignore_vorton: true, // Default to ignoring Vorton for FriendlyFire
         }
     }
 }

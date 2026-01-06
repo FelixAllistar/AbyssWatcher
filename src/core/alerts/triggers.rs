@@ -20,6 +20,8 @@ pub struct TriggerContext<'a> {
     pub logi_characters: &'a HashSet<String>,
     /// Characters designated as neut-sensitive
     pub neut_sensitive_characters: &'a HashSet<String>,
+    /// Whether to ignore Vorton weapons in FriendlyFire evaluation
+    pub ignore_vorton: bool,
 }
 
 /// Evaluate a specific trigger against the current context.
@@ -74,10 +76,12 @@ fn evaluate_friendly_fire(ctx: &TriggerContext) -> Option<String> {
             continue;
         }
         
-        // Exclude Vorton weapons (case-insensitive check)
-        let weapon_lower = event.weapon.to_lowercase();
-        if weapon_lower.contains("vorton") {
-            continue;
+        // Optionally exclude Vorton weapons (case-insensitive check)
+        if ctx.ignore_vorton {
+            let weapon_lower = event.weapon.to_lowercase();
+            if weapon_lower.contains("vorton") {
+                continue;
+            }
         }
         
         return Some(format!(
@@ -92,13 +96,18 @@ fn evaluate_friendly_fire(ctx: &TriggerContext) -> Option<String> {
 
 /// Alert when a logi-designated character receives incoming damage
 fn evaluate_logi_taking_damage(ctx: &TriggerContext) -> Option<String> {
+    println!("[DEBUG] Logi chars in context: {:?}", ctx.logi_characters);
     for event in ctx.combat_events {
+        println!("[DEBUG] Checking event: type={:?}, incoming={}, character='{}'", 
+            event.event_type, event.incoming, event.character);
         if event.event_type != EventType::Damage || !event.incoming {
             continue;
         }
         
         // Check if the character receiving damage is designated as logi
-        if ctx.logi_characters.contains(&event.character) {
+        let is_logi = ctx.logi_characters.contains(&event.character);
+        println!("[DEBUG] Is '{}' in logi set? {}", event.character, is_logi);
+        if is_logi {
             return Some(format!(
                 "LOGI TAKING DAMAGE! {} hit by {} for {:.0}",
                 event.character,
@@ -214,6 +223,7 @@ mod tests {
             tracked_characters: &tracked,
             logi_characters: &logi,
             neut_sensitive_characters: &neut,
+            ignore_vorton: true,
         };
         
         let result = evaluate_trigger(AlertRuleId::EnvironmentalDamage, &ctx);
@@ -244,6 +254,7 @@ mod tests {
             tracked_characters: &tracked,
             logi_characters: &logi,
             neut_sensitive_characters: &neut,
+            ignore_vorton: true,
         };
         
         let result = evaluate_trigger(AlertRuleId::FriendlyFire, &ctx);
@@ -274,6 +285,7 @@ mod tests {
             tracked_characters: &tracked,
             logi_characters: &logi,
             neut_sensitive_characters: &neut,
+            ignore_vorton: true, // Test that Vorton IS excluded when this is true
         };
         
         let result = evaluate_trigger(AlertRuleId::FriendlyFire, &ctx);
@@ -302,6 +314,7 @@ mod tests {
             tracked_characters: &tracked,
             logi_characters: &logi,
             neut_sensitive_characters: &neut,
+            ignore_vorton: true,
         };
         
         let result = evaluate_trigger(AlertRuleId::LogiTakingDamage, &ctx);
@@ -327,6 +340,7 @@ mod tests {
             tracked_characters: &tracked,
             logi_characters: &logi,
             neut_sensitive_characters: &neut,
+            ignore_vorton: true,
         };
         
         let result = evaluate_trigger(AlertRuleId::CapacitorFailure, &ctx);
@@ -356,6 +370,7 @@ mod tests {
             tracked_characters: &tracked,
             logi_characters: &logi,
             neut_sensitive_characters: &neut,
+            ignore_vorton: true,
         };
         
         let result = evaluate_trigger(AlertRuleId::LogiNeuted, &ctx);

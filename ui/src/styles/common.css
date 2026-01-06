@@ -562,3 +562,57 @@ h1 {
     color: var(--text-muted);
     margin: 4px 0 0 22px;
 }
+
+.rule-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.rule-cooldown {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.cooldown-input {
+    width: 40px;
+    padding: 2px 4px;
+    font-size: 10px;
+    background: var(--btn-bg);
+    border: 1px solid var(--border-color-dim);
+    border-radius: 3px;
+    color: var(--text-main);
+    text-align: center;
+}
+
+.cooldown-input:focus {
+    outline: none;
+    border-color: var(--border-color);
+}
+
+.cooldown-label {
+    font-size: 9px;
+    color: var(--text-muted);
+}
+
+.rule-filter {
+    margin: 6px 0 0 22px;
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 3px;
+}
+
+.filter-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 9px;
+    color: var(--text-dim);
+    cursor: pointer;
+}
+
+.filter-checkbox input[type="checkbox"] {
+    width: 11px;
+    height: 11px;
+}

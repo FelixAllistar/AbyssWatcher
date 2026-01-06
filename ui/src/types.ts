@@ -89,6 +89,10 @@ export type AlertSound = 'Default' | 'Warning' | 'Critical' | 'None';
 export interface AlertRuleConfig {
     enabled: boolean;
     sound: AlertSound;
+    /** Per-rule cooldown in seconds (default: 3) */
+    cooldown_seconds?: number;
+    /** For FriendlyFire: ignore damage from Vorton weapons */
+    ignore_vorton?: boolean;
 }
 
 /** Character role designations */

@@ -32,6 +32,10 @@ AbyssWatcher is a high-performance DPS Meter for EVE Online, built as a modern d
     - `inline_bookmarks.rs`: Inline bookmark system for marking Abyss runs.
       - Appends bookmark lines directly to gamelog files in EVE log format.
       - Types: `RunStart`, `RunEnd`, `RoomStart`, `RoomEnd`, `Highlight`.
+    - `alerts/`: Modular alert system for combat notifications.
+      - `model.rs`: Alert types (`AlertRuleId`, `AlertSound`, `AlertEvent`, `CharacterRoles`).
+      - `triggers.rs`: Trigger evaluation logic for each rule type.
+      - `engine.rs`: Orchestrates triggers, manages cooldowns, holds `AlertEngineConfig`.
 - **Frontend (Web)**:
   - Located in `ui/`.
   - **Stack**: React 18, TypeScript, Vite 7 (configured at root).
@@ -52,6 +56,7 @@ AbyssWatcher is a high-performance DPS Meter for EVE Online, built as a modern d
     - `CombatBreakdown.tsx`: Collapsible character list with `CharacterCard`. Each card computes its own totals.
     - `CharacterSelector.tsx`: Dropdown overlay for toggling active log tracking.
     - `SettingsModal.tsx`: Configuration overlay for log paths and analysis windows.
+    - `AlertSettings.tsx`: Alert configuration UI (character roles, rule toggles).
     - `ReplayControls.tsx`: Timeline slider and playback controls.
     - `LogBrowser.tsx` & `RawLogViewer.tsx`: Replay file selection and debugging.
     - `WindowFrame.tsx`: Custom window decoration system (TitleBar + Resize Handles).
@@ -71,6 +76,28 @@ The UI uses a **single source of truth** for combat metrics:
 - Maintains running sums (`char_actions_map`) that are incrementally updated as events enter/exit the time window.
 - Handles all 4 event types uniformly: `Damage`, `Repair`, `Capacitor`, `Neut`.
 - Both incoming and outgoing events are tracked and properly expired when they leave the window.
+
+### Alert System
+
+The alert system provides audio notifications for critical combat situations.
+
+**Alert Engine Configuration:**
+- **Per-Rule Cooldowns**: Customizable durations (default 3s) managed via `cooldown_seconds` in `AlertRuleConfig`.
+- **Friendly Fire Filter**: Optional `ignore_vorton` toggle to exclude chain-lightning damage from alerts.
+- **Data Flow**: `coordinator.tick()` -> `AlertEngine::evaluate()` -> Frontend `alert-triggered` event -> Web Audio Playback.
+
+**Alert Rules:**
+
+| Rule ID | Trigger Condition | Default Sound |
+|---------|-------------------|---------------|
+| `EnvironmentalDamage` | Incoming damage from "Unstable Abyssal Depths" | `boundary.wav` |
+| `FriendlyFire` | Tracked char hits tracked char (optional Vorton filter) | `friendly_fire.wav` |
+| `LogiTakingDamage` | Logi-designated character receives damage | `logi_attacked.wav` |
+| `NeutSensitiveNeuted` | Neut-sensitive character is neuted | `neut.wav` |
+| `CapacitorFailure` | Module activation fails due to low cap (`(notify)`) | `capacitor_empty.wav` |
+| `LogiNeuted` | Logi-designated character is neuted | `logi_neuted.wav` |
+
+**Configuration:** Stored in `settings.json` under `alert_settings` with role designations (logi, neut-sensitive).
 
 ## Design & UX Principles: The "Unified Zero-Container HUD"
 
@@ -142,3 +169,7 @@ AbyssWatcher follows the **Unified Zero-Container HUD** design language, priorit
   - **Dragging**: Uses manual `appWindow.startDragging()` on the custom title bar to ensure reliability across Linux distros.
   - **Resizing**: Implements 8 invisible edge/corner handles that call `appWindow.startResizeDragging()`.
   - **Compacted Header**: Controls (Chars, Settings) are integrated directly into the title bar to save vertical space.
+
+### 5. Tauri v2 Media CSP Fix
+- **Problem**: In production builds, the default Content Security Policy (CSP) in Tauri v2 blocks local audio playback from `asset:` or `self` sources.
+- **Fix**: Updated `tauri.conf.json` to include `media-src 'self' asset:` in the `security.csp` configuration. This ensures the Web Audio API can fetch `.wav` files from the bundled `dist` assets.

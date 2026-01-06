@@ -145,8 +145,12 @@ impl LineParser {
         // Clean HTML tags from body
         let cleaned_body = strip_tags(body);
         
+        println!("[DEBUG] parse_notify_line: cleaned_body='{}'", cleaned_body);
+        
         // Try to match capacitor failure pattern
-        let caps = CAP_FAIL_RE.captures(&cleaned_body)?;
+        let caps = CAP_FAIL_RE.captures(&cleaned_body);
+        println!("[DEBUG] CAP_FAIL_RE matched: {}", caps.is_some());
+        let caps = caps?;
         
         let module_name = caps.get(1)?.as_str().to_string();
         let required_cap: f32 = caps.get(2)?.as_str().parse().ok()?;

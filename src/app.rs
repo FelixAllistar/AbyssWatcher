@@ -580,17 +580,34 @@ pub fn run() {
                     
                     // Evaluate alerts and emit events
                     if !output.new_combat_events.is_empty() || !output.new_notify_events.is_empty() {
+                        println!("[DEBUG] Processing {} combat events, {} notify events for alerts",
+                            output.new_combat_events.len(),
+                            output.new_notify_events.len());
+                        
                         let char_names: std::collections::HashSet<String> = active_paths
                             .iter()
                             .filter_map(|p| coordinator.get_character_info(p))
                             .map(|(name, _)| name)
                             .collect();
                         
+                        println!("[DEBUG] Tracked characters: {:?}", char_names);
+                        println!("[DEBUG] Alert config roles: logi={:?}, neut_sensitive={:?}",
+                            current_settings.alert_settings.roles.logi_characters,
+                            current_settings.alert_settings.roles.neut_sensitive_characters);
+                        
+                        // Debug: print first event
+                        if let Some(evt) = output.new_combat_events.first() {
+                            println!("[DEBUG] First combat event: type={:?}, incoming={}, source='{}', character='{}'",
+                                evt.event_type, evt.incoming, evt.source, evt.character);
+                        }
+                        
                         let alerts = alert_engine.evaluate(
                             &output.new_combat_events,
                             &output.new_notify_events,
                             &char_names,
                         );
+                        
+                        println!("[DEBUG] Alert engine returned {} alerts", alerts.len());
                         
                         for alert in alerts {
                             println!("[ALERT] {}", alert.message);
