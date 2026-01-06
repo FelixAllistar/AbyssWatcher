@@ -105,9 +105,19 @@ function MainApp() {
 
       // Play sound if specified
       if (sound) {
-        const audio = new Audio(`/sounds/${sound}.wav`);
+        const soundPath = `/sounds/${sound}.wav`;
+        console.log(`[SOUND] Attempting to play: ${soundPath}`);
+        const audio = new Audio(soundPath);
         audio.volume = 0.7;
-        audio.play().catch(err => console.warn('Failed to play alert sound:', err));
+        audio.play().catch(err => {
+          console.error(`[SOUND ERROR] Failed to play ${soundPath}:`, err);
+          // Try alternative path if it fails
+          if (soundPath.startsWith('/')) {
+            const altPath = soundPath.substring(1);
+            console.log(`[SOUND] Retrying with alt path: ${altPath}`);
+            new Audio(altPath).play().catch(e => console.error(`[SOUND ERROR] Retry failed:`, e));
+          }
+        });
       }
     });
 

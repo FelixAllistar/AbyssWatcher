@@ -60,19 +60,43 @@ fn evaluate_environmental_damage(ctx: &TriggerContext) -> Option<String> {
 /// Excludes Vorton weapons (chain lightning hits teammates).
 fn evaluate_friendly_fire(ctx: &TriggerContext) -> Option<String> {
     for event in ctx.combat_events {
-        if event.event_type != EventType::Damage || event.incoming {
+        // Only check outgoing damage
+        if event.event_type != EventType::Damage {
+            continue;
+        }
+        if event.incoming {
+            println!("[DEBUG FF] Skipping incoming damage event");
             continue;
         }
         
+        println!("[DEBUG FF] Checking outgoing damage: character='{}', target='{}', weapon='{}'",
+            event.character, event.target, event.weapon);
+        
         // Source must be a tracked character
         if !ctx.tracked_characters.contains(&event.character) {
+            println!("[DEBUG FF] Character '{}' not in tracked set", event.character);
             continue;
         }
         
         // Target must also be a tracked character (but not self)
-        if !ctx.tracked_characters.contains(&event.target) 
-            || event.target == event.character 
-        {
+        // Note: target may be decorated like "CharName[CORP](Ship)", so we check if it starts with a tracked name
+        let target_is_tracked = ctx.tracked_characters.iter().any(|name| {
+            event.target.starts_with(name) && 
+            (event.target.len() == name.len() || 
+             event.target.chars().nth(name.len()).map_or(false, |c| c == '[' || c == ' '))
+        });
+        
+        if !target_is_tracked {
+            println!("[DEBUG FF] Target '{}' not in tracked set", event.target);
+            continue;
+        }
+        
+        // Check for self-damage by comparing the base names
+        let attacker_matches_target = ctx.tracked_characters.iter().any(|name| {
+            event.character == *name && event.target.starts_with(name)
+        });
+        if attacker_matches_target && event.character == event.target.split('[').next().unwrap_or("").trim() {
+            println!("[DEBUG FF] Target is same as character (self-damage)");
             continue;
         }
         
@@ -80,14 +104,18 @@ fn evaluate_friendly_fire(ctx: &TriggerContext) -> Option<String> {
         if ctx.ignore_vorton {
             let weapon_lower = event.weapon.to_lowercase();
             if weapon_lower.contains("vorton") {
+                println!("[DEBUG FF] Vorton weapon excluded: {}", event.weapon);
                 continue;
             }
         }
         
+        // Extract clean target name for the alert message
+        let clean_target = event.target.split('[').next().unwrap_or(&event.target).trim();
+        
         return Some(format!(
             "Friendly fire! {} hit {} with {}",
             event.character,
-            event.target,
+            clean_target,
             event.weapon
         ));
     }

@@ -489,6 +489,7 @@ async fn detect_filaments(
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_log::Builder::default().build())
         .setup(|app| {
             let handle = app.handle().clone();
             
@@ -597,8 +598,8 @@ pub fn run() {
                         
                         // Debug: print first event
                         if let Some(evt) = output.new_combat_events.first() {
-                            println!("[DEBUG] First combat event: type={:?}, incoming={}, source='{}', character='{}'",
-                                evt.event_type, evt.incoming, evt.source, evt.character);
+                            println!("[DEBUG] First combat event: type={:?}, incoming={}, source='{}', character='{}', target='{}'",
+                                evt.event_type, evt.incoming, evt.source, evt.character, evt.target);
                         }
                         
                         let alerts = alert_engine.evaluate(
