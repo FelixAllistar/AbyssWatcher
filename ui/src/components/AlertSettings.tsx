@@ -98,13 +98,13 @@ const AlertSettings: FC<AlertSettingsProps> = ({ config, trackedCharacters, onCh
         });
     };
 
-    const toggleIgnoreVorton = () => {
-        const current = config.rules['FriendlyFire'] || { enabled: false, sound: 'Default', cooldown_seconds: 3, ignore_vorton: true };
+    const toggleIgnoreVorton = (ruleId: AlertRuleId) => {
+        const current = config.rules[ruleId] || { enabled: false, sound: 'Default', cooldown_seconds: 3, ignore_vorton: true };
         onChange({
             ...config,
             rules: {
                 ...config.rules,
-                ['FriendlyFire']: { ...current, ignore_vorton: !current.ignore_vorton },
+                [ruleId]: { ...current, ignore_vorton: !current.ignore_vorton },
             },
         });
     };
@@ -189,14 +189,14 @@ const AlertSettings: FC<AlertSettingsProps> = ({ config, trackedCharacters, onCh
                             </div>
                             <p className="rule-description">{rule.description}</p>
 
-                            {/* FriendlyFire-specific filter */}
-                            {rule.id === 'FriendlyFire' && isEnabled && (
+                            {/* Vorton filter for FriendlyFire and LogiTakingDamage */}
+                            {(rule.id === 'FriendlyFire' || rule.id === 'LogiTakingDamage') && isEnabled && (
                                 <div className="rule-filter">
                                     <label className="filter-checkbox">
                                         <input
                                             type="checkbox"
                                             checked={ignoreVorton}
-                                            onChange={toggleIgnoreVorton}
+                                            onChange={() => toggleIgnoreVorton(rule.id)}
                                         />
                                         <span>Ignore Vorton weapons (chain lightning AOE)</span>
                                     </label>

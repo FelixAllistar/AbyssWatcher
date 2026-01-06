@@ -20,17 +20,16 @@ pub struct TriggerContext<'a> {
     pub logi_characters: &'a HashSet<String>,
     /// Characters designated as neut-sensitive
     pub neut_sensitive_characters: &'a HashSet<String>,
-    /// Whether to ignore Vorton weapons in FriendlyFire evaluation
-    pub ignore_vorton: bool,
 }
 
 /// Evaluate a specific trigger against the current context.
 /// Returns Some(message) if the trigger fired, None otherwise.
-pub fn evaluate_trigger(rule_id: AlertRuleId, ctx: &TriggerContext) -> Option<String> {
+/// `ignore_vorton` is passed per-rule for FriendlyFire and LogiTakingDamage.
+pub fn evaluate_trigger(rule_id: AlertRuleId, ctx: &TriggerContext, ignore_vorton: bool) -> Option<String> {
     match rule_id {
         AlertRuleId::EnvironmentalDamage => evaluate_environmental_damage(ctx),
-        AlertRuleId::FriendlyFire => evaluate_friendly_fire(ctx),
-        AlertRuleId::LogiTakingDamage => evaluate_logi_taking_damage(ctx),
+        AlertRuleId::FriendlyFire => evaluate_friendly_fire(ctx, ignore_vorton),
+        AlertRuleId::LogiTakingDamage => evaluate_logi_taking_damage(ctx, ignore_vorton),
         AlertRuleId::NeutSensitiveNeuted => evaluate_neut_sensitive(ctx),
         AlertRuleId::CapacitorFailure => evaluate_capacitor_failure(ctx),
         AlertRuleId::LogiNeuted => evaluate_logi_neuted(ctx),
@@ -57,8 +56,8 @@ fn evaluate_environmental_damage(ctx: &TriggerContext) -> Option<String> {
 }
 
 /// Alert when a tracked character damages another tracked character.
-/// Excludes Vorton weapons (chain lightning hits teammates).
-fn evaluate_friendly_fire(ctx: &TriggerContext) -> Option<String> {
+/// Optionally excludes Vorton weapons (chain lightning hits teammates).
+fn evaluate_friendly_fire(ctx: &TriggerContext, ignore_vorton: bool) -> Option<String> {
     for event in ctx.combat_events {
         // Only check outgoing damage
         if event.event_type != EventType::Damage {
@@ -101,7 +100,7 @@ fn evaluate_friendly_fire(ctx: &TriggerContext) -> Option<String> {
         }
         
         // Optionally exclude Vorton weapons (case-insensitive check)
-        if ctx.ignore_vorton {
+        if ignore_vorton {
             let weapon_lower = event.weapon.to_lowercase();
             if weapon_lower.contains("vorton") {
                 println!("[DEBUG FF] Vorton weapon excluded: {}", event.weapon);
@@ -123,26 +122,31 @@ fn evaluate_friendly_fire(ctx: &TriggerContext) -> Option<String> {
 }
 
 /// Alert when a logi-designated character receives incoming damage
-fn evaluate_logi_taking_damage(ctx: &TriggerContext) -> Option<String> {
-    println!("[DEBUG] Logi chars in context: {:?}", ctx.logi_characters);
+fn evaluate_logi_taking_damage(ctx: &TriggerContext, ignore_vorton: bool) -> Option<String> {
     for event in ctx.combat_events {
-        println!("[DEBUG] Checking event: type={:?}, incoming={}, character='{}'", 
-            event.event_type, event.incoming, event.character);
         if event.event_type != EventType::Damage || !event.incoming {
             continue;
         }
         
         // Check if the character receiving damage is designated as logi
-        let is_logi = ctx.logi_characters.contains(&event.character);
-        println!("[DEBUG] Is '{}' in logi set? {}", event.character, is_logi);
-        if is_logi {
-            return Some(format!(
-                "LOGI TAKING DAMAGE! {} hit by {} for {:.0}",
-                event.character,
-                event.source,
-                event.amount
-            ));
+        if !ctx.logi_characters.contains(&event.character) {
+            continue;
         }
+        
+        // Optionally exclude Vorton weapons (chain lightning hits teammates)
+        if ignore_vorton {
+            let weapon_lower = event.weapon.to_lowercase();
+            if weapon_lower.contains("vorton") {
+                continue;
+            }
+        }
+        
+        return Some(format!(
+            "LOGI TAKING DAMAGE! {} hit by {} for {:.0}",
+            event.character,
+            event.source,
+            event.amount
+        ));
     }
     None
 }
@@ -251,10 +255,9 @@ mod tests {
             tracked_characters: &tracked,
             logi_characters: &logi,
             neut_sensitive_characters: &neut,
-            ignore_vorton: true,
         };
         
-        let result = evaluate_trigger(AlertRuleId::EnvironmentalDamage, &ctx);
+        let result = evaluate_trigger(AlertRuleId::EnvironmentalDamage, &ctx, false);
         assert!(result.is_some());
         assert!(result.unwrap().contains("Unstable Abyssal Depths"));
     }
@@ -282,10 +285,9 @@ mod tests {
             tracked_characters: &tracked,
             logi_characters: &logi,
             neut_sensitive_characters: &neut,
-            ignore_vorton: true,
         };
         
-        let result = evaluate_trigger(AlertRuleId::FriendlyFire, &ctx);
+        let result = evaluate_trigger(AlertRuleId::FriendlyFire, &ctx, true);
         assert!(result.is_some());
         assert!(result.unwrap().contains("Friendly fire"));
     }
@@ -313,10 +315,9 @@ mod tests {
             tracked_characters: &tracked,
             logi_characters: &logi,
             neut_sensitive_characters: &neut,
-            ignore_vorton: true, // Test that Vorton IS excluded when this is true
         };
         
-        let result = evaluate_trigger(AlertRuleId::FriendlyFire, &ctx);
+        let result = evaluate_trigger(AlertRuleId::FriendlyFire, &ctx, true);
         assert!(result.is_none(), "Vorton damage should not trigger friendly fire");
     }
 
@@ -342,12 +343,39 @@ mod tests {
             tracked_characters: &tracked,
             logi_characters: &logi,
             neut_sensitive_characters: &neut,
-            ignore_vorton: true,
         };
         
-        let result = evaluate_trigger(AlertRuleId::LogiTakingDamage, &ctx);
+        let result = evaluate_trigger(AlertRuleId::LogiTakingDamage, &ctx, true);
         assert!(result.is_some());
         assert!(result.unwrap().contains("LOGI TAKING DAMAGE"));
+    }
+
+    #[test]
+    fn test_logi_taking_damage_excludes_vorton() {
+        let (mut combat, notify, tracked, mut logi, neut) = empty_context();
+        
+        logi.insert("LogiPilot".to_string());
+        
+        combat.push(make_combat_event(
+            EventType::Damage,
+            true, // incoming
+            "Teammate",
+            "LogiPilot",
+            "LogiPilot",
+            "Small Vorton Projector II", // Vorton - should be excluded
+            30.0,
+        ));
+        
+        let ctx = TriggerContext {
+            combat_events: &combat,
+            notify_events: &notify,
+            tracked_characters: &tracked,
+            logi_characters: &logi,
+            neut_sensitive_characters: &neut,
+        };
+        
+        let result = evaluate_trigger(AlertRuleId::LogiTakingDamage, &ctx, true);
+        assert!(result.is_none(), "Vorton damage to logi should not trigger alert when ignore_vorton is true");
     }
 
     #[test]
@@ -368,10 +396,9 @@ mod tests {
             tracked_characters: &tracked,
             logi_characters: &logi,
             neut_sensitive_characters: &neut,
-            ignore_vorton: true,
         };
         
-        let result = evaluate_trigger(AlertRuleId::CapacitorFailure, &ctx);
+        let result = evaluate_trigger(AlertRuleId::CapacitorFailure, &ctx, false);
         assert!(result.is_some());
         assert!(result.unwrap().contains("CAP FAILURE"));
     }
@@ -398,10 +425,9 @@ mod tests {
             tracked_characters: &tracked,
             logi_characters: &logi,
             neut_sensitive_characters: &neut,
-            ignore_vorton: true,
         };
         
-        let result = evaluate_trigger(AlertRuleId::LogiNeuted, &ctx);
+        let result = evaluate_trigger(AlertRuleId::LogiNeuted, &ctx, false);
         assert!(result.is_some());
         assert!(result.unwrap().contains("LOGI NEUTED"));
     }

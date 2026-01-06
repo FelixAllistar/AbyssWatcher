@@ -36,6 +36,7 @@ struct AppState {
     settings: Mutex<Settings>,
     config_manager: ConfigManager,
     loop_tx: mpsc::Sender<LoopCommand>,
+    audio_tx: std::sync::mpsc::Sender<AudioCommand>,
     replay: Arc<RwLock<Option<ReplaySession>>>,
 }
 
@@ -507,37 +508,61 @@ fn get_embedded_sound(filename: &str) -> Option<&'static [u8]> {
     }
 }
 
+#[derive(Clone, Debug)]
+enum AudioCommand {
+    Play(String),
+}
+
 #[tauri::command]
-fn play_alert_sound(filename: String) -> Result<(), String> {
+fn play_alert_sound(filename: String, state: State<'_, AppState>) -> Result<(), String> {
+    state.audio_tx.send(AudioCommand::Play(filename)).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn spawn_audio_thread() -> std::sync::mpsc::Sender<AudioCommand> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    
     std::thread::spawn(move || {
         use std::io::Cursor;
         use rodio::{Decoder, Sink, OutputStreamBuilder};
         
-        let Some(sound_data) = get_embedded_sound(&filename) else {
-            println!("[AUDIO] Unknown sound file: {}", filename);
-            return;
+        let stream_handle = match OutputStreamBuilder::open_default_stream() {
+            Ok(s) => s,
+            Err(e) => {
+                println!("[AUDIO] Failed to open audio stream: {}", e);
+                return;
+            }
         };
 
-        println!("[AUDIO] Playing embedded sound: {}", filename);
+        let sink = Sink::connect_new(&stream_handle.mixer());
+        sink.set_volume(0.7);
 
-        let cursor = Cursor::new(sound_data);
-        match Decoder::new(cursor) {
-            Ok(source) => {
-                match OutputStreamBuilder::open_default_stream() {
-                    Ok(stream_handle) => {
-                        let sink = Sink::connect_new(&stream_handle.mixer());
-                        sink.append(source);
-                        sink.set_volume(0.7);
-                        sink.sleep_until_end();
-                        println!("[AUDIO] Playback complete: {}", filename);
-                    },
-                    Err(e) => println!("[AUDIO] Failed to open audio stream: {}", e),
+        println!("[AUDIO] Audio thread started.");
+
+        for cmd in rx {
+            match cmd {
+                AudioCommand::Play(filename) => {
+                    let Some(sound_data) = get_embedded_sound(&filename) else {
+                        println!("[AUDIO] Unknown sound file: {}", filename);
+                        continue;
+                    };
+
+                    println!("[AUDIO] Queuing sound: {}", filename);
+                    let cursor = Cursor::new(sound_data);
+                    
+                    match Decoder::new(cursor) {
+                        Ok(source) => {
+                            sink.append(source);
+                            // Sink automatically plays sounds sequentially 
+                        },
+                        Err(e) => println!("[AUDIO] Error decoding {}: {}", filename, e),
+                    }
                 }
-            },
-            Err(e) => println!("[AUDIO] Error decoding {}: {}", filename, e),
+            }
         }
     });
-    Ok(())
+
+    tx
 }
 
 pub fn run() {
@@ -564,12 +589,16 @@ pub fn run() {
             
             // Create a channel for communicating with the background loop
             let (tx, mut rx) = mpsc::channel(32);
+            
+            // Spawn dedicated audio thread
+            let audio_tx = spawn_audio_thread();
 
             app.manage(AppState {
                 tracked_paths: Mutex::new(HashSet::new()),
                 settings: Mutex::new(settings),
                 config_manager,
                 loop_tx: tx,
+                audio_tx,
                 replay: Arc::new(RwLock::new(None)),
             });
 

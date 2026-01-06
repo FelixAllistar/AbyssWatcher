@@ -68,8 +68,8 @@ impl LineParser {
             EventType::Damage
         };
 
-        // 2. Identify Direction
-        let direction = determine_direction(&lower, &event_type)?;
+        // 2. Identify Direction (pass raw body for color-based neut detection)
+        let direction = determine_direction(&lower, &body, &event_type)?;
 
         // 3. Extract Amount
         let (mut amount, remainder) = split_amount_body(&cleaned_body)?;
@@ -185,7 +185,7 @@ enum Direction {
     Incoming,
 }
 
-fn determine_direction(lower_body: &str, event_type: &EventType) -> Option<Direction> {
+fn determine_direction(lower_body: &str, raw_body: &str, event_type: &EventType) -> Option<Direction> {
     match event_type {
         EventType::Damage => {
             if lower_body.contains(" to ") {
@@ -215,37 +215,26 @@ fn determine_direction(lower_body: &str, event_type: &EventType) -> Option<Direc
             }
         }
         EventType::Neut => {
-            // "energy neutralized <Target>" -> Outgoing? Wait, missing 'to'.
-            // Log line: "61 GJ energy neutralized Starving Damavik"
-            // It seems "neutralized" implies "to" if no preposition?
-            // Or maybe "neutralized to"? No, the example had no "to".
+            // EVE uses same text for incoming/outgoing neuts, but colors differ:
+            // 0xffe57f7f = incoming (reddish) - being neuted
+            // 0xff7fffff = outgoing (cyan) - doing the neuting
+            let raw_lower = raw_body.to_ascii_lowercase();
             
-            // "energy drained from <Target>" -> Outgoing (I drain FROM them).
-            // "energy drained to <Target>" -> Incoming (They drain ME? or I drain TO them? Wait, drained TO usually means transfer? No, Nos transfers TO source).
-            // If line is: "-6 GJ energy drained to Proteus", and I am listening...
-            // Usually "to" implies target. So Proteus is target.
-            
-            if lower_body.contains(" neutralized ") {
-                // "energy neutralized <Target>"
-                // Assume if it doesn't say "by", it's outgoing (I am neutralizing).
-                // Example: "61 GJ energy neutralized Starving Damavik" -> Outgoing.
-                if lower_body.contains(" by ") {
-                    Some(Direction::Incoming)
-                } else {
-                    Some(Direction::Outgoing)
-                }
-            } else if lower_body.contains(" drained from ") {
-                // "drained from <Entity>" -> I am draining FROM them. Outgoing Neut.
-                Some(Direction::Outgoing)
-            } else if lower_body.contains(" drained to ") {
-                // "drained to <Entity>" -> Drained TO them. I am being drained? 
-                // Or I am transfering? No, Nos logic.
-                // Let's assume standard "to" = Outgoing target for now.
-                Some(Direction::Outgoing)
-            } else if lower_body.contains(" drained by ") {
+            if raw_lower.contains("0xffe57f7f") {
+                // Reddish color = incoming neut
                 Some(Direction::Incoming)
+            } else if raw_lower.contains("0xff7fffff") {
+                // Cyan color = outgoing neut  
+                Some(Direction::Outgoing)
             } else {
-                None
+                // Fallback to text-based detection
+                if lower_body.contains(" neutralized by ") || lower_body.contains(" drained by ") {
+                    Some(Direction::Incoming)
+                } else if lower_body.contains(" neutralized ") || lower_body.contains(" drained from ") || lower_body.contains(" drained to ") {
+                    Some(Direction::Outgoing)
+                } else {
+                    None
+                }
             }
         }
     }
@@ -473,7 +462,8 @@ mod tests {
         let mut parser = LineParser::new();
         let _ = parser.parse_line("Session Started: 2025.12.11 08:30:48", "Source");
 
-        let line = "[ 2025.12.11 08:30:48 ] (combat) <color=0xffe57f7f><b>61 GJ</b><color=0x77ffffff><font size=10> energy neutralized </font><b><color=0xffffffff>Starving Damavik</b><color=0x77ffffff><font size=10> - Starving Damavik</font>";
+        // Outgoing neut - note the 0xff7fffff color (cyan) indicates outgoing
+        let line = "[ 2025.12.11 08:30:48 ] (combat) <color=0xff7fffff><b>61 GJ</b><color=0x77ffffff><font size=10> energy neutralized </font><b><color=0xffffffff>Starving Damavik</b><color=0x77ffffff><font size=10> - Starving Damavik</font>";
 
         let event = parser.parse_line(line, "Source").expect("should parse neut");
 
@@ -481,6 +471,21 @@ mod tests {
         assert_eq!(event.event_type, EventType::Neut);
         assert_eq!(event.target, "Starving Damavik");
         assert!(!event.incoming);
+    }
+
+    #[test]
+    fn parses_incoming_neut() {
+        let mut parser = LineParser::new();
+        let _ = parser.parse_line("Session Started: 2026.01.06 21:56:26", "I CherryPick Gneiss");
+
+        // Incoming neut - note the 0xffe57f7f color (reddish) indicates incoming
+        let line = "[ 2026.01.06 21:56:26 ] (combat) <color=0xffe57f7f><b>38 GJ</b><color=0x77ffffff><font size=10> energy neutralized </font><b><color=0xffffffff><font size=12><color=0xFFFFB300> <u><b>Hawk</b></u></color></font> [<b>CARII</b>]  [Felix Allistar]<color=0xFFFFFFFF><b> -</b><color=0x77ffffff><font size=10> - Small Energy Neutralizer II</font>";
+
+        let event = parser.parse_line(line, "I CherryPick Gneiss").expect("should parse incoming neut");
+
+        assert_eq!(event.amount, 38.0);
+        assert_eq!(event.event_type, EventType::Neut);
+        assert!(event.incoming, "Should be incoming neut based on color 0xffe57f7f");
     }
 
     #[test]

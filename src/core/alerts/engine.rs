@@ -52,14 +52,6 @@ impl AlertEngineConfig {
             .unwrap_or(3);
         Duration::from_secs(secs as u64)
     }
-
-    /// Get the ignore_vorton filter for FriendlyFire
-    pub fn get_ignore_vorton(&self) -> bool {
-        self.rules
-            .get(&AlertRuleId::FriendlyFire)
-            .map(|c| c.ignore_vorton)
-            .unwrap_or(true)
-    }
 }
 
 /// Alert engine state
@@ -84,7 +76,8 @@ impl AlertEngine {
     }
 
     /// Evaluate all triggers against current events.
-    /// Returns list of alert events that fired.
+    /// Returns list of alert events that fired (deduplicated by rule_id per tick).
+    /// Audio playback is handled by the frontend/audio thread sequentially.
     pub fn evaluate(
         &mut self,
         combat_events: &[CombatEvent],
@@ -104,7 +97,6 @@ impl AlertEngine {
             tracked_characters,
             logi_characters: &logi_set,
             neut_sensitive_characters: &neut_set,
-            ignore_vorton: self.config.get_ignore_vorton(),
         };
 
         for rule_id in AlertRuleId::all() {
@@ -113,7 +105,7 @@ impl AlertEngine {
                 continue;
             }
 
-            // Check cooldown (per-rule)
+            // Check per-rule cooldown to prevent spam
             let rule_cooldown = self.config.get_cooldown(*rule_id);
             if let Some(last_fire) = self.cooldowns.get(rule_id) {
                 if now.duration_since(*last_fire) < rule_cooldown {
@@ -121,8 +113,14 @@ impl AlertEngine {
                 }
             }
 
+            // Get per-rule ignore_vorton setting (only used by FriendlyFire and LogiTakingDamage)
+            let ignore_vorton = self.config.rules
+                .get(rule_id)
+                .map(|c| c.ignore_vorton)
+                .unwrap_or(true);
+
             // Evaluate trigger
-            if let Some(message) = evaluate_trigger(*rule_id, &ctx) {
+            if let Some(message) = evaluate_trigger(*rule_id, &ctx, ignore_vorton) {
                 self.cooldowns.insert(*rule_id, now);
                 
                 // Get timestamp from the first relevant event

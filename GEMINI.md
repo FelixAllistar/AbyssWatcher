@@ -17,6 +17,9 @@ AbyssWatcher is a high-performance DPS Meter for EVE Online, built as a modern d
     - `model.rs`: Combat events, DPS samples, fight summaries.
     - `parser.rs`: Right-to-left positional parsing of combat logs.
       - **Right-to-Left Strategy**: Pops known Quality (Hits, etc.), then pops Weapon, then joins remainder as Entity. This correctly handles target names with dashes (e.g., "Habitation Module - Breeding Facility") and optional quality suffixes.
+      - **Neut Direction Detection**: Uses HTML color codes to distinguish direction (since text is identical for both parties):
+        - `0xffe57f7f` (Reddish) = Incoming (being neuted).
+        - `0xff7fffff` (Cyan) = Outgoing (doing the neuting).
     - `log_io.rs`: Efficient log tailing and historical scanning.
     - `analysis.rs`: DPS computation and time-series aggregation.
     - `state.rs`: The `EngineState` that holds combat history.
@@ -83,8 +86,9 @@ The alert system provides audio notifications for critical combat situations.
 
 **Alert Engine Configuration:**
 - **Per-Rule Cooldowns**: Customizable durations (default 3s) managed via `cooldown_seconds` in `AlertRuleConfig`.
-- **Friendly Fire Filter**: Optional `ignore_vorton` toggle to exclude chain-lightning damage from alerts.
-- **Data Flow**: `coordinator.tick()` -> `AlertEngine::evaluate()` -> Frontend `alert-triggered` event -> Web Audio Playback.
+- **Squashed Queue Architecture**: The engine evaluates ALL enabled rules every tick. It no longer uses a global cooldown or early-exit "first rule wins" logic. This ensures multi-event clusters (e.g., being neuted while taking damage) trigger all relevant alerts.
+- **Independent Vorton Filters**: `FriendlyFire` and `LogiTakingDamage` have separate `ignore_vorton` toggles to exclude chain-lightning damage.
+- **Data Flow**: `coordinator.tick()` -> `AlertEngine::evaluate()` -> Frontend `alert-triggered` event -> Web Audio Playback (sequential queuing via `rodio::Sink`).
 
 **Alert Rules:**
 
