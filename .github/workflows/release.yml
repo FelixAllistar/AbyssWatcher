@@ -62,7 +62,7 @@ jobs:
           tagName: ${{ github.event.inputs.version || github.ref_name }}
           releaseName: 'AbyssWatcher ${{ github.event.inputs.version || github.ref_name }}'
           releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           projectPath: "./"
           args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin' || '' }}
