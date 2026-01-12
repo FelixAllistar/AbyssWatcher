@@ -4,6 +4,10 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
 
 jobs:
   release:
@@ -55,8 +59,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'AbyssWatcher ${{ github.ref_name }}'
+          tagName: ${{ github.event.inputs.version || github.ref_name }}
+          releaseName: 'AbyssWatcher ${{ github.event.inputs.version || github.ref_name }}'
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true
           prerelease: false
