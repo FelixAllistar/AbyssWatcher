@@ -9,6 +9,14 @@ interface TooltipProps {
 
 const Tooltip: React.FC<TooltipProps> = ({ text, children, position = 'bottom', align = 'right' }) => {
   const [isVisible, setIsVisible] = useState(false);
+  const tooltipId = React.useId();
+
+  // Clone child to add aria-describedby for accessibility
+  const child = React.isValidElement(children)
+    ? React.cloneElement(children as React.ReactElement<any>, {
+        'aria-describedby': isVisible ? tooltipId : undefined
+      })
+    : children;
 
   return (
     <div
@@ -18,9 +26,13 @@ const Tooltip: React.FC<TooltipProps> = ({ text, children, position = 'bottom', 
       onFocus={() => setIsVisible(true)}
       onBlur={() => setIsVisible(false)}
     >
-      {children}
+      {child}
       {isVisible && (
-        <div className={`tooltip-content tooltip-${position} tooltip-align-${align}`}>
+        <div
+          id={tooltipId}
+          role="tooltip"
+          className={`tooltip-content tooltip-${position} tooltip-align-${align}`}
+        >
           {text}
         </div>
       )}
