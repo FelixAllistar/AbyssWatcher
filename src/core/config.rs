@@ -19,7 +19,10 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         // Try to guess the default EVE log path, or fallback to something safe
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+        let home = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .unwrap_or_else(|_| ".".to_string());
+        
         // This is a rough default, the user will likely change it.
         let default_path = PathBuf::from(home)
             .join("Documents/EVE/logs/Gamelogs");
