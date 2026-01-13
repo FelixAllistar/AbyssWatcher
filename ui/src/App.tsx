@@ -17,6 +17,7 @@ import type { DpsUpdate, CharacterState, SettingsWithAlerts, RoomMarkerState, Ro
 export type { DpsUpdate, CharacterState, CombatAction, TargetHit, Settings, Bookmark, BookmarkType, RoomMarkerState } from './types';
 
 import WindowFrame from './components/WindowFrame';
+import Tooltip from './components/Tooltip';
 
 function MainApp() {
   const [dpsData, setDpsData] = useState<DpsUpdate | null>(null);
@@ -214,21 +215,29 @@ function MainApp() {
       {/* Bookmark Buttons - only show if a character is tracked */}
       {characters.some(c => c.tracked) && (
         <>
-          <button
-            className="icon-btn"
-            onClick={handleMarkHighlight}
-            title="Add highlight bookmark"
+          <Tooltip text="Add highlight bookmark" position="bottom" align="right">
+            <button
+              className="icon-btn"
+              onClick={handleMarkHighlight}
+              aria-label="Add highlight bookmark"
+            >
+              📍
+            </button>
+          </Tooltip>
+          <Tooltip
+            text={roomMarkerState === 'InRoom' ? 'End room marker' : 'Start room marker'}
+            position="bottom"
+            align="right"
           >
-            📍
-          </button>
-          <button
-            className={`icon-btn ${roomMarkerState === 'InRoom' ? 'active' : ''}`}
-            onClick={handleToggleRoom}
-            title={roomMarkerState === 'InRoom' ? 'End room marker' : 'Start room marker'}
-            style={roomMarkerState === 'InRoom' ? { background: 'var(--accent-green)', color: '#000' } : {}}
-          >
-            {roomMarkerState === 'InRoom' ? '🚪✓' : '🚪'}
-          </button>
+            <button
+              className={`icon-btn ${roomMarkerState === 'InRoom' ? 'active' : ''}`}
+              onClick={handleToggleRoom}
+              style={roomMarkerState === 'InRoom' ? { background: 'var(--accent-green)', color: '#000' } : {}}
+              aria-label={roomMarkerState === 'InRoom' ? 'End room marker' : 'Start room marker'}
+            >
+              {roomMarkerState === 'InRoom' ? '🚪✓' : '🚪'}
+            </button>
+          </Tooltip>
         </>
       )}
       <button

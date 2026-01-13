@@ -616,3 +616,56 @@ h1 {
     width: 11px;
     height: 11px;
 }
+/* Tooltip Component */
+.tooltip-container {
+    position: relative;
+    display: inline-flex;
+}
+
+.tooltip-content {
+    position: absolute;
+    z-index: 1000;
+    padding: 4px 8px;
+    background: rgba(15, 15, 20, 0.95);
+    color: var(--text-main);
+    font-size: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px);
+    font-weight: 500;
+}
+
+.tooltip-bottom {
+    top: 100%;
+    transform: translateY(4px);
+}
+
+.tooltip-top {
+    bottom: 100%;
+    transform: translateY(-4px);
+}
+
+.tooltip-align-right {
+    right: 0;
+}
+
+.tooltip-align-left {
+    left: 0;
+}
+
+.tooltip-align-center {
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* Adjust transform for combined classes */
+.tooltip-bottom.tooltip-align-center {
+    transform: translateX(-50%) translateY(4px);
+}
+
+.tooltip-top.tooltip-align-center {
+    transform: translateX(-50%) translateY(-4px);
+}
