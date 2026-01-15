@@ -160,6 +160,11 @@ fn evaluate_neut_sensitive(ctx: &TriggerContext) -> Option<String> {
         
         // Check if the character being neuted is designated as neut-sensitive
         if ctx.neut_sensitive_characters.contains(&event.character) {
+            // If also logi, skip because LogiNeuted rule handles it
+            if ctx.logi_characters.contains(&event.character) {
+                continue;
+            }
+
             return Some(format!(
                 "NEUT PRESSURE on {}! {:.0} GJ from {}",
                 event.character,
@@ -430,5 +435,88 @@ mod tests {
         let result = evaluate_trigger(AlertRuleId::LogiNeuted, &ctx, false);
         assert!(result.is_some());
         assert!(result.unwrap().contains("LOGI NEUTED"));
+    }
+
+    #[test]
+    fn test_logi_also_neut_sensitive_only_triggers_logi_alert() {
+        let (mut combat, notify, tracked, mut logi, mut neut) = empty_context();
+
+        logi.insert("LogiPilot".to_string());
+        neut.insert("LogiPilot".to_string());
+
+        combat.push(make_combat_event(
+            EventType::Neut,
+            true, // incoming
+            "Starving Damavik",
+            "LogiPilot",
+            "LogiPilot",
+            "Energy Neutralizer",
+            50.0,
+        ));
+
+        let ctx = TriggerContext {
+            combat_events: &combat,
+            notify_events: &notify,
+            tracked_characters: &tracked,
+            logi_characters: &logi,
+            neut_sensitive_characters: &neut,
+        };
+
+        // LogiNeuted should fire
+        let result_logi = evaluate_trigger(AlertRuleId::LogiNeuted, &ctx, false);
+        assert!(result_logi.is_some(), "Logi alert should fire");
+
+        // NeutSensitiveNeuted should NOT fire (because it's a logi char)
+        let result_neut = evaluate_trigger(AlertRuleId::NeutSensitiveNeuted, &ctx, false);
+        assert!(result_neut.is_none(), "Neut sensitive alert should NOT fire for logi pilot");
+    }
+
+    #[test]
+    fn test_mixed_logi_and_neut_sensitive() {
+        let (mut combat, notify, tracked, mut logi, mut neut) = empty_context();
+
+        logi.insert("LogiPilot".to_string());
+        neut.insert("LogiPilot".to_string());
+
+        neut.insert("NeutPilot".to_string());
+
+        // LogiPilot getting neuted
+        combat.push(make_combat_event(
+            EventType::Neut,
+            true,
+            "Starving Damavik 1",
+            "LogiPilot",
+            "LogiPilot",
+            "Energy Neutralizer",
+            50.0,
+        ));
+
+        // NeutPilot getting neuted
+        combat.push(make_combat_event(
+            EventType::Neut,
+            true,
+            "Starving Damavik 2",
+            "NeutPilot",
+            "NeutPilot",
+            "Energy Neutralizer",
+            50.0,
+        ));
+
+        let ctx = TriggerContext {
+            combat_events: &combat,
+            notify_events: &notify,
+            tracked_characters: &tracked,
+            logi_characters: &logi,
+            neut_sensitive_characters: &neut,
+        };
+
+        // NeutSensitiveNeuted should fire for NeutPilot
+        let result_neut = evaluate_trigger(AlertRuleId::NeutSensitiveNeuted, &ctx, false);
+        assert!(result_neut.is_some(), "Neut sensitive alert should fire for NeutPilot");
+        assert!(result_neut.unwrap().contains("NeutPilot"), "Should be for NeutPilot");
+
+        // LogiNeuted should fire for LogiPilot
+        let result_logi = evaluate_trigger(AlertRuleId::LogiNeuted, &ctx, false);
+        assert!(result_logi.is_some(), "Logi alert should fire for LogiPilot");
     }
 }
