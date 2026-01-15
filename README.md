@@ -32,9 +32,12 @@ Requires [Rust](https://www.rust-lang.org/), [Node.js](https://nodejs.org/), and
 pnpm install
 
 # Build for Production (Recommended)
-cargo tauri build --no-bundle
+cargo tauri build
 
-# The binary will be at target/release/abyss-watcher
+# Artifacts will be in:
+# - Windows: target/release/bundle/msi/
+# - Linux: target/release/bundle/appimage/
+# - macOS: target/release/bundle/macos/
 ```
 *Note: Do not use `cargo install`. Always use `cargo tauri build` to correctly embed frontend assets.*
 
