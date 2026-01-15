@@ -60,6 +60,7 @@ AbyssWatcher is a high-performance DPS Meter for EVE Online, built as a modern d
     - `CharacterSelector.tsx`: Dropdown overlay for toggling active log tracking.
     - `SettingsModal.tsx`: Configuration overlay for log paths and analysis windows.
     - `AlertSettings.tsx`: Alert configuration UI (character roles, rule toggles).
+    - `Tooltip.tsx`: Accessible, styled tooltip wrapper for buttons (replacing native `title` attributes).
     - `ReplayControls.tsx`: Timeline slider and playback controls.
     - `LogBrowser.tsx` & `RawLogViewer.tsx`: Replay file selection and debugging.
     - `WindowFrame.tsx`: Custom window decoration system (TitleBar + Resize Handles).
@@ -175,3 +176,18 @@ AbyssWatcher follows the **Unified Zero-Container HUD** design language, priorit
   - **Dragging**: Uses manual `appWindow.startDragging()` on the custom title bar to ensure reliability across Linux distros.
   - **Resizing**: Implements 8 invisible edge/corner handles that call `appWindow.startResizeDragging()`.
   - **Compacted Header**: Controls (Chars, Settings) are integrated directly into the title bar to save vertical space.
+
+## CI/CD & Release
+
+The project uses GitHub Actions for automated cross-platform releases.
+
+- **Workflow**: `.github/workflows/release.yml`
+- **Triggers**:
+  - **Tags**: Pushing a tag starting with `v*` (e.g., `v1.0.0`) triggers a full release build.
+  - **Manual**: Can be triggered manually via `workflow_dispatch` with a custom version string.
+- **Platforms**:
+  - **Windows**: `windows-latest`
+  - **Linux**: `ubuntu-22.04` (Builds AppImage/Deb)
+  - **macOS**: `macos-latest` (Universal Binary: x86_64 + aarch64)
+- **Code Signing**:
+  - macOS builds require Apple Developer secrets (`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, etc.) to be valid. Currently, these secrets must be configured in the repo settings for notarization to work.
