@@ -21,8 +21,7 @@ Get the latest build from [Releases](../../releases).
 - **Linux**: `.AppImage` or `.deb`
 - **macOS**: `.dmg` or `.app`
 
-> **Note for macOS:** These builds are currently **unsigned**. If you see a "damaged" error, run:
-> `xattr -cr /Applications/AbyssWatcher.app`
+> **Note for macOS:** Builds are currently **unsigned**. You may need to allow the application manually in System Settings or via terminal to run it.
 
 ## Building from Source
 
