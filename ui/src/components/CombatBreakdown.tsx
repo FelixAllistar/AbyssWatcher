@@ -4,6 +4,7 @@ import type { CombatAction, DpsUpdate, CharacterState } from '../types';
 interface CombatBreakdownProps {
     data: DpsUpdate | null;
     characters: CharacterState[];
+    defaultExpanded?: boolean;
 }
 
 const getMetricStyle = (type: CombatAction['action_type'], incoming: boolean) => {
@@ -20,10 +21,11 @@ const getMetricStyle = (type: CombatAction['action_type'], incoming: boolean) =>
 interface CharacterCardProps {
     name: string;
     actions: CombatAction[];
+    defaultExpanded?: boolean;
 }
 
-const CharacterCard: FC<CharacterCardProps> = ({ name, actions }) => {
-    const [isCollapsed, setIsCollapsed] = useState(true);
+const CharacterCard: FC<CharacterCardProps> = ({ name, actions, defaultExpanded = false }) => {
+    const [isCollapsed, setIsCollapsed] = useState(!defaultExpanded);
     const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
     const stats = useMemo(() => {
@@ -197,7 +199,7 @@ const CharacterCard: FC<CharacterCardProps> = ({ name, actions }) => {
     );
 };
 
-const CombatBreakdown: FC<CombatBreakdownProps> = ({ data, characters }) => {
+const CombatBreakdown: FC<CombatBreakdownProps> = ({ data, characters, defaultExpanded = false }) => {
     const activeData = useMemo(() => {
         const map = new Map<string, CombatAction[]>(
             Object.entries(data?.combat_actions_by_character || {})
@@ -214,7 +216,7 @@ const CombatBreakdown: FC<CombatBreakdownProps> = ({ data, characters }) => {
     return (
         <div id="combat-breakdown">
             {activeData.map(([name, actions]) => (
-                <CharacterCard key={name} name={name} actions={actions} />
+                <CharacterCard key={name} name={name} actions={actions} defaultExpanded={defaultExpanded} />
             ))}
         </div>
     );

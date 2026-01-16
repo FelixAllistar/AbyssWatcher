@@ -36,13 +36,21 @@ function ReplayWindow() {
     useEffect(() => {
         const unlistenUpdate = listen<DpsUpdate>('replay-dps-update', (event) => {
             setDpsData(event.payload);
-            // Extract chars from data
-            const chars = Object.keys(event.payload.combat_actions_by_character || {}).map(name => ({
-                character: name,
-                path: '',
-                tracked: true
-            }));
-            setCharacters(chars);
+            // Extract chars from data and accumulate them
+            setCharacters(prev => {
+                const newCharNames = Object.keys(event.payload.combat_actions_by_character || {});
+                const existingNames = new Set(prev.map(c => c.character));
+
+                const newChars: CharacterState[] = newCharNames
+                    .filter(name => !existingNames.has(name))
+                    .map(name => ({
+                        character: name,
+                        path: '', // Replay doesn't need path for now
+                        tracked: true
+                    }));
+
+                return [...prev, ...newChars];
+            });
         });
 
         const unlistenStatus = listen<{ current_time: number, progress: number }>('replay-status', (event) => {
@@ -152,7 +160,7 @@ function ReplayWindow() {
 
             <div id="data-container" style={{ flexGrow: 1, overflowY: 'auto' }}>
                 <StatusBar combatActions={dpsData?.combat_actions_by_character ?? null} />
-                <CombatBreakdown data={dpsData} characters={characters} />
+                <CombatBreakdown data={dpsData} characters={characters} defaultExpanded={true} />
             </div>
 
             <ReplayControls
