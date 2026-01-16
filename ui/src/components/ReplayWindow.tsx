@@ -33,6 +33,9 @@ function ReplayWindow() {
     const [sessionStartTime, setSessionStartTime] = useState(0);
     const [currentGamelogPath, setCurrentGamelogPath] = useState<string | null>(null);
 
+    // Hoisted state for log selection
+    const [selectedLogs, setSelectedLogs] = useState<Set<string>>(new Set());
+
     useEffect(() => {
         const unlistenUpdate = listen<DpsUpdate>('replay-dps-update', (event) => {
             setDpsData(event.payload);
@@ -65,6 +68,7 @@ function ReplayWindow() {
             unlistenUpdate.then(f => f());
             unlistenStatus.then(f => f());
             unlistenRaw.then(f => f());
+            invoke('stop_replay').catch(console.error);
         };
     }, []);
 
@@ -73,25 +77,37 @@ function ReplayWindow() {
         start_time: number;
     }
 
-    const handleStartReplay = async (logs: [string, string][]) => {
+    const handleStartReplay = async () => {
         try {
-            const info = await invoke<ReplaySessionInfo>('start_replay', { logs });
+            const settings = await invoke<{ gamelog_dir: string }>('get_settings');
+            const logs = await invoke<Record<string, { path: string }[]>>('get_logs_by_character', { path: settings.gamelog_dir });
+
+            const selection: [string, string][] = [];
+            Object.entries(logs).forEach(([char, files]) => {
+                files.forEach(f => {
+                    if (selectedLogs.has(f.path)) {
+                        selection.push([char, f.path]);
+                    }
+                });
+            });
+
+            if (selection.length === 0) {
+                alert("Please select at least one log file.");
+                return;
+            }
+
+            const info = await invoke<ReplaySessionInfo>('start_replay', { logs: selection });
             setStatus(p => ({ ...p, duration: info.duration }));
             setSessionStartTime(info.start_time);
-            setIsPlaying(true);
+            setIsPlaying(true); // Auto-play enabled
             setShowLogs(false);
 
-            // Store the first log path for bookmark operations
-            if (logs.length > 0) {
-                setCurrentGamelogPath(logs[0][1]);
-                console.log('Loading bookmarks for:', logs[0][1]);
-                // Try to load existing bookmarks
+            if (selection.length > 0) {
+                setCurrentGamelogPath(selection[0][1]);
                 try {
-                    const bks = await invoke<Bookmark[]>('get_session_bookmarks', { gamelogPath: logs[0][1] });
-                    console.log('Loaded bookmarks:', bks);
+                    const bks = await invoke<Bookmark[]>('get_session_bookmarks', { gamelogPath: selection[0][1] });
                     setBookmarks(bks);
                 } catch (err) {
-                    console.error('Failed to load bookmarks:', err);
                     setBookmarks([]);
                 }
             }
@@ -99,6 +115,21 @@ function ReplayWindow() {
             console.error(e);
             alert('Error starting replay: ' + e);
         }
+    };
+
+
+    const handleToggleLog = (path: string, checked: boolean) => {
+        if (path === '__ALL__' && !checked) {
+            setSelectedLogs(new Set());
+            return;
+        }
+
+        setSelectedLogs(prev => {
+            const next = new Set(prev);
+            if (checked) next.add(path);
+            else next.delete(path);
+            return next;
+        });
     };
 
     const handlePlayPause = async () => {
@@ -119,6 +150,12 @@ function ReplayWindow() {
         const m = Math.floor(secs / 60);
         const s = Math.floor(secs % 60);
         return `${m}:${s.toString().padStart(2, '0')}`;
+    };
+
+    const handleStopReplay = () => {
+        invoke('stop_replay').catch(console.error);
+        setIsPlaying(false);
+        setStatus(p => ({ ...p, progress: 0, current_time: 0 }));
     };
 
     const handleDetectFilaments = async () => {
@@ -181,6 +218,9 @@ function ReplayWindow() {
                 <LogBrowser
                     onClose={() => setShowLogs(false)}
                     onStartReplay={handleStartReplay}
+                    onStopReplay={handleStopReplay}
+                    selectedLogs={selectedLogs}
+                    onToggleLog={handleToggleLog}
                 />
             )}
 

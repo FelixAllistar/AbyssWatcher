@@ -227,7 +227,16 @@ fn set_replay_speed(speed: f64, state: State<'_, AppState>) {
     let mut replay = state.replay.write().unwrap();
     if let Some(session) = replay.as_mut() {
         session.controller.set_speed(speed);
-        println!("Replay speed set to {}", speed);
+    }
+}
+
+#[tauri::command]
+fn stop_replay(state: State<'_, AppState>) {
+    println!("Stopping active replay session...");
+    let mut replay = state.replay.write().unwrap();
+    if let Some(session) = replay.take() {
+        println!("Replay session {} stopped by user.", session.id);
+        // The background loop sees replay is None (or id mismatch) and exits
     }
 }
 
@@ -622,6 +631,18 @@ fn spawn_audio_thread() -> std::sync::mpsc::Sender<AudioCommand> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::default().build())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                if window.label() == "replay" {
+                    println!("Replay window destroyed. Cleaning up session...");
+                    let app_state = window.state::<AppState>();
+                    let mut replay = app_state.replay.write().unwrap();
+                    if let Some(session) = replay.take() {
+                        println!("Replay session {} terminated by window close.", session.id);
+                    }
+                }
+            }
+        })
         .setup(|app| {
             let handle = app.handle().clone();
             
@@ -786,7 +807,8 @@ pub fn run() {
             detect_filaments,
             get_session_bookmarks,
             // Audio
-            play_alert_sound
+            play_alert_sound,
+            stop_replay
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

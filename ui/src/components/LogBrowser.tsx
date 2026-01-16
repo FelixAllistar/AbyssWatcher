@@ -9,18 +9,20 @@ interface LogFile {
 
 interface LogBrowserProps {
     onClose: () => void;
-    onStartReplay: (logs: [string, string][]) => void;
+    onStartReplay: () => void;
+    onStopReplay: () => void;
+    selectedLogs: Set<string>;
+    onToggleLog: (path: string, checked: boolean) => void;
 }
 
-const LogBrowser: FC<LogBrowserProps> = ({ onClose, onStartReplay }) => {
+const LogBrowser: FC<LogBrowserProps> = ({ onClose, onStartReplay, onStopReplay, selectedLogs, onToggleLog }) => {
     const [currentPath, setCurrentPath] = useState('');
     const [charLogs, setCharLogs] = useState<Record<string, LogFile[]>>({});
-    const [selectedLogs, setSelectedLogs] = useState<Set<string>>(new Set());
 
     const refreshLogs = async (dir: string) => {
         try {
             const logs = await invoke<Record<string, LogFile[]>>('get_logs_by_character', { path: dir });
-            // Restore selection state
+            // Apply selection state for UI consistency if needed, though we rely on props now
             const processedLogs: Record<string, LogFile[]> = {};
 
             Object.entries(logs).forEach(([char, files]) => {
@@ -32,6 +34,7 @@ const LogBrowser: FC<LogBrowserProps> = ({ onClose, onStartReplay }) => {
         }
     };
 
+    // Initial load
     useEffect(() => {
         const init = async () => {
             const settings = await invoke<{ gamelog_dir: string }>('get_settings');
@@ -41,40 +44,8 @@ const LogBrowser: FC<LogBrowserProps> = ({ onClose, onStartReplay }) => {
         init();
     }, []);
 
-    const handleToggleLog = (path: string, checked: boolean) => {
-        setSelectedLogs(prev => {
-            const next = new Set(prev);
-            if (checked) next.add(path);
-            else next.delete(path);
-            return next;
-        });
-
-        setCharLogs(prev => {
-            const next = { ...prev };
-            Object.keys(next).forEach(char => {
-                next[char] = next[char].map(log =>
-                    log.path === path ? { ...log, enabled: checked } : log
-                );
-            });
-            return next;
-        });
-    };
-
     const handleStart = () => {
-        const selection: [string, string][] = [];
-        Object.entries(charLogs).forEach(([char, logs]) => {
-            logs.forEach(log => {
-                if (selectedLogs.has(log.path)) {
-                    selection.push([char, log.path]);
-                }
-            });
-        });
-
-        if (selection.length === 0) {
-            alert("Please select at least one log file.");
-            return;
-        }
-        onStartReplay(selection);
+        onStartReplay();
     };
 
     const handleBrowse = async () => {
@@ -115,7 +86,7 @@ const LogBrowser: FC<LogBrowserProps> = ({ onClose, onStartReplay }) => {
                                 <input
                                     type="checkbox"
                                     checked={selectedLogs.has(log.path)}
-                                    onChange={(e) => handleToggleLog(log.path, e.target.checked)}
+                                    onChange={(e) => onToggleLog(log.path, e.target.checked)}
                                     style={{ marginRight: '6px' }}
                                 />
                                 <span>{new Date(log.session_start.secs_since_epoch * 1000).toLocaleString()}</span>
@@ -127,8 +98,18 @@ const LogBrowser: FC<LogBrowserProps> = ({ onClose, onStartReplay }) => {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                <button className="icon-btn" onClick={onClose}>Cancel</button>
-                <button className="icon-btn primary-btn" onClick={handleStart}>Load Selection</button>
+                <button
+                    className="icon-btn"
+                    onClick={() => onToggleLog('__ALL__', false)}
+                    style={{ marginRight: 'auto' }}
+                >
+                    Clear Selection
+                </button>
+                <button className="icon-btn danger-btn" onClick={onStopReplay}>Stop Replay</button>
+                <button className="icon-btn" onClick={onClose}>Close</button>
+                <button className="icon-btn primary-btn" onClick={handleStart} disabled={selectedLogs.size === 0}>
+                    Load Selection ({selectedLogs.size})
+                </button>
             </div>
         </div>
     );
