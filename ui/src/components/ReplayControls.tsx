@@ -63,10 +63,7 @@ const ReplayControls: FC<ReplayControlsProps> = ({
         };
     }).filter((n): n is NonNullable<typeof n> => n !== null);
 
-    // Debug: log once when notches change
-    if (notches.length > 0) {
-        console.log('[ReplayControls] Rendering', notches.length, 'notches:', notches);
-    }
+
     return (
         <div id="replay-controls" style={{
             display: 'flex',
