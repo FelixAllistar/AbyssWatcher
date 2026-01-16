@@ -106,6 +106,23 @@ The alert system provides audio notifications for critical combat situations.
 
 **Embedded Audio:** All alert sounds are compiled directly into the binary using `include_bytes!` (in `src/app.rs`). This ensures the single executable works from any location without external sound files. Source `.wav` files are located in `ui/public/sounds/`.
 
+## Tracking & Session Lifecycle
+
+### Dynamic Log Tracking
+Tracking is managed dynamically via shared state in `src/app.rs` without requiring restarts:
+1. **State**: `AppState` holds a `tracked_paths` set guarded by a Mutex.
+2. **Frontend Action**: Toggling a character in the UI triggers the `toggle_tracking` command.
+3. **Coordinator Loop**: The main background loop retrieves the current `tracked_paths` snapshot on every tick.
+4. **Hot-Reloading**: The `Coordinator` automatically picks up new paths and drops old ones during its processing cycle, ensuring seamless transitions between characters.
+
+### Replay Window & Cleanup
+The Replay system uses a self-cleaning lifecycle to prevent resource leaks:
+1. **Process Isolation**: Replay sessions run in a dedicated `tokio::spawn` loop, separate from the main live tracking loop.
+2. **Window Events**: `src/app.rs` implements an `on_window_event` handler.
+   - When the **Replay Window** is closed (User clicks 'X' or `Command+W`), the `WindowEvent::Destroyed` event fires.
+   - This handler explicitly acquires the generic `ReplaySession` lock and drops the active session.
+3. **Loop Termination**: The background replay loop checks for session validity on every iteration. If the session has been dropped (due to window close or explicit stop), the loop terminates immediately.
+
 ## Design & UX Principles: The "Unified Zero-Container HUD"
 
 AbyssWatcher follows the **Unified Zero-Container HUD** design language, prioritizing raw tactical data over UI "chrome".
