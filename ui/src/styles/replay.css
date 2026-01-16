@@ -130,14 +130,36 @@ body {
 #timeline-container {
     flex-grow: 1;
     display: flex;
-    flex-direction: column;
-    justify-content: center;
+    align-items: center;
+    position: relative;
+    /* Allow notches to be positioned absolutely within */
+}
+
+/* Range input styling */
+#timeline-container input[type="range"] {
+    width: 100%;
+    z-index: 1;
+}
+
+/* Bookmark notches on timeline */
+.timeline-notch {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 4px;
+    height: 16px;
+    border-radius: 2px;
+    pointer-events: auto;
+    cursor: pointer;
+    opacity: 0.9;
+    z-index: 10;
 }
 
 #timeline {
     width: 100%;
     cursor: pointer;
 }
+
 
 #time-display {
     font-family: monospace;

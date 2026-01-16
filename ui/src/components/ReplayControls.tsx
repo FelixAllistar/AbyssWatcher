@@ -20,11 +20,11 @@ interface ReplayControlsProps {
 /** Get color for bookmark type */
 const getBookmarkColor = (type: string): string => {
     switch (type) {
-        case 'RUN_START': return 'var(--accent-green)';
-        case 'RUN_END': return 'var(--accent-red)';
-        case 'ROOM_START': return 'var(--accent-blue)';
-        case 'ROOM_END': return 'var(--accent-blue)';
-        case 'HIGHLIGHT': return 'var(--accent-yellow, #ffcc00)';
+        case 'RUN_START': return 'var(--color-rep-out)';  // Lime green
+        case 'RUN_END': return 'var(--color-dps-in)';     // Red
+        case 'ROOM_START': return 'var(--color-dps-out)'; // Cyan
+        case 'ROOM_END': return 'var(--color-dps-out)';   // Cyan
+        case 'HIGHLIGHT': return 'var(--color-cap-out)';  // Yellow
         default: return 'var(--text-main)';
     }
 };
@@ -63,6 +63,10 @@ const ReplayControls: FC<ReplayControlsProps> = ({
         };
     }).filter((n): n is NonNullable<typeof n> => n !== null);
 
+    // Debug: log once when notches change
+    if (notches.length > 0) {
+        console.log('[ReplayControls] Rendering', notches.length, 'notches:', notches);
+    }
     return (
         <div id="replay-controls" style={{
             display: 'flex',
