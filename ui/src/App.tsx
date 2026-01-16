@@ -123,10 +123,11 @@ function MainApp() {
 
   const handleToggleTracking = async (char: CharacterState) => {
     try {
-      await invoke('toggle_tracking', { path: char.path });
+      // Use authoritative response from backend to avoid race conditions
+      const response = await invoke<{ tracked: boolean }>('toggle_tracking', { path: char.path });
       setCharacters((prev) =>
         prev.map((c) =>
-          c.path === char.path ? { ...c, tracked: !c.tracked } : c
+          c.path === char.path ? { ...c, tracked: response.tracked } : c
         )
       );
     } catch (e) {

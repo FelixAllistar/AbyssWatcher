@@ -292,14 +292,22 @@ async fn get_available_characters(state: State<'_, AppState>) -> Result<Vec<Char
     }).collect())
 }
 
+#[derive(serde::Serialize)]
+struct ToggleTrackingResponse {
+    tracked: bool,
+}
+
 #[tauri::command]
-fn toggle_tracking(path: PathBuf, state: State<'_, AppState>) {
+fn toggle_tracking(path: PathBuf, state: State<'_, AppState>) -> ToggleTrackingResponse {
     let mut tracked = state.tracked_paths.lock().unwrap();
-    if tracked.contains(&path) {
+    let is_now_tracked = if tracked.contains(&path) {
         tracked.remove(&path);
+        false
     } else {
-        tracked.insert(path);
-    }
+        tracked.insert(path.clone());
+        true
+    };
+    ToggleTrackingResponse { tracked: is_now_tracked }
 }
 
 // ============================================
@@ -454,36 +462,82 @@ async fn detect_filaments(
         return Ok(());
     }
 
-    // 4. Append bookmarks to gamelog with historical timestamps
-    let mut f = std::fs::OpenOptions::new()
-        .append(true)
-        .open(&gamelog_path)
-        .map_err(|e| e.to_string())?;
-
-    use std::io::Write;
-    use chrono::{DateTime, Utc};
+    // 4. Insert bookmarks into gamelog at correct chronological positions
+    use std::io::{BufRead, BufReader, Write};
+    use chrono::{DateTime, Utc, NaiveDateTime};
+    
+    // Helper to parse EVE log timestamp from a line
+    let parse_line_timestamp = |line: &str| -> Option<Duration> {
+        // EVE format: [ YYYY.MM.DD HH:MM:SS ]
+        let start = line.find('[')? + 1;
+        let end = line.find(']')?;
+        let ts_str = line[start..end].trim();
+        let naive = NaiveDateTime::parse_from_str(ts_str, "%Y.%m.%d %H:%M:%S").ok()?;
+        Some(Duration::from_secs(naive.and_utc().timestamp() as u64))
+    };
     
     let format_ts = |dur: Duration| -> String {
         let dt: DateTime<Utc> = DateTime::from(std::time::UNIX_EPOCH + dur);
         dt.format("%Y.%m.%d %H:%M:%S").to_string()
     };
 
-    let mut added_count = 0;
-    for run in runs {
-        let start_ts = format_ts(run.entry_time);
-        let start_line = format!("[ {} ] (bookmark) RUN_START\n", start_ts);
-        f.write_all(start_line.as_bytes()).map_err(|e| e.to_string())?;
-        added_count += 1;
+    // Build bookmark lines with their target timestamps
+    let mut bookmarks_to_insert: Vec<(Duration, String)> = Vec::new();
+    for run in &runs {
+        let start_line = format!("[ {} ] (bookmark) RUN_START", format_ts(run.entry_time));
+        bookmarks_to_insert.push((run.entry_time, start_line));
 
         if let Some(exit_time) = run.exit_time {
-            let end_ts = format_ts(exit_time);
-            let end_line = format!("[ {} ] (bookmark) RUN_END\n", end_ts);
-            f.write_all(end_line.as_bytes()).map_err(|e| e.to_string())?;
-            added_count += 1;
+            let end_line = format!("[ {} ] (bookmark) RUN_END", format_ts(exit_time));
+            bookmarks_to_insert.push((exit_time, end_line));
         }
     }
     
-    println!("Appended {} run bookmarks to {:?}", added_count, gamelog_path);
+    // Sort bookmarks by timestamp
+    bookmarks_to_insert.sort_by_key(|(ts, _)| *ts);
+
+    // Read all existing lines
+    let file = std::fs::File::open(&gamelog_path).map_err(|e| e.to_string())?;
+    let reader = BufReader::new(file);
+    let existing_lines: Vec<String> = reader.lines().filter_map(|l| l.ok()).collect();
+
+    // Merge: insert bookmarks at correct positions
+    let mut merged_lines: Vec<String> = Vec::with_capacity(existing_lines.len() + bookmarks_to_insert.len());
+    let mut bookmark_iter = bookmarks_to_insert.into_iter().peekable();
+
+    for line in existing_lines {
+        // Skip any existing bookmark lines to avoid duplicates
+        if line.contains("(bookmark)") && (line.contains("RUN_START") || line.contains("RUN_END")) {
+            continue;
+        }
+
+        // Insert bookmarks that should come before this line
+        if let Some(line_ts) = parse_line_timestamp(&line) {
+            while let Some((bm_ts, _)) = bookmark_iter.peek() {
+                if *bm_ts <= line_ts {
+                    let (_, bm_line) = bookmark_iter.next().unwrap();
+                    merged_lines.push(bm_line);
+                } else {
+                    break;
+                }
+            }
+        }
+        merged_lines.push(line);
+    }
+
+    // Append any remaining bookmarks (in case they're after all existing lines)
+    for (_, bm_line) in bookmark_iter {
+        merged_lines.push(bm_line);
+    }
+
+    // Write merged content back to file
+    let mut file = std::fs::File::create(&gamelog_path).map_err(|e| e.to_string())?;
+    for line in &merged_lines {
+        writeln!(file, "{}", line).map_err(|e| e.to_string())?;
+    }
+    
+    let added_count = runs.len() * 2 - runs.iter().filter(|r| r.exit_time.is_none()).count();
+    println!("Inserted {} run bookmarks into {:?}", added_count, gamelog_path);
     Ok(())
 }
 
