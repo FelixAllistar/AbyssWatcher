@@ -108,20 +108,23 @@ The alert system provides audio notifications for critical combat situations.
 
 ## Tracking & Session Lifecycle
 
-### Dynamic Log Tracking
-Tracking is managed dynamically via shared state in `src/app.rs` without requiring restarts:
-1. **State**: `AppState` holds a `tracked_paths` set guarded by a Mutex.
-2. **Frontend Action**: Toggling a character in the UI triggers the `toggle_tracking` command.
-3. **Coordinator Loop**: The main background loop retrieves the current `tracked_paths` snapshot on every tick.
-4. **Hot-Reloading**: The `Coordinator` automatically picks up new paths and drops old ones during its processing cycle, ensuring seamless transitions between characters.
+### Live Tracking (Dynamic)
+Live tracking is managed dynamically via shared state (`tracked_paths`) in `src/app.rs`, allowing users to add/remove characters without restarting the application:
 
-### Replay Window & Cleanup
-The Replay system uses a self-cleaning lifecycle to prevent resource leaks:
-1. **Process Isolation**: Replay sessions run in a dedicated `tokio::spawn` loop, separate from the main live tracking loop.
-2. **Window Events**: `src/app.rs` implements an `on_window_event` handler.
-   - When the **Replay Window** is closed (User clicks 'X' or `Command+W`), the `WindowEvent::Destroyed` event fires.
-   - This handler explicitly acquires the generic `ReplaySession` lock and drops the active session.
-3. **Loop Termination**: The background replay loop checks for session validity on every iteration. If the session has been dropped (due to window close or explicit stop), the loop terminates immediately.
+1.  **State**: `AppState` holds a `tracked_paths` set (guarded by Mutex).
+2.  **Authoritative Toggle**: The `toggle_tracking` command returns the *actual* new state (`true`/`false`) of the path in the registry. The Frontend uses this response to update its UI, preventing desync (race conditions) between the UI "toggle" and the backend reality.
+3.  **Coordinator Loop**: The main background loop (running every 250ms) snapshots `tracked_paths` and passes it to `coordinator.tick()`.
+4.  **Hot-Reloading**: The Coordinator compares the new path set with its internal set. It automatically initializes watchers for new paths and drops watchers for removed paths, ensuring seamless transitions.
+
+### Replay Session (Isolated)
+The Replay system runs as a completely **separate, isolated process** from the live tracker:
+
+1.  **Session Scope**: A replay session is initialized with a *fixed list* of log files selected by the user. It does not look at `tracked_paths` or `gamelog_dir`.
+2.  **Process Isolation**: The session runs in its own generic `tokio::spawn` loop ("Replay Loop").
+3.  **Lifecycle**:
+    *   **Creation**: `start_replay` creates a `ReplayController` and spawns the loop.
+    *   **Cleanup**: When the **Replay Window** is closed (`WindowEvent::Destroyed`), the application explicitly drops the `ReplaySession` struct.
+    *   **Termination**: The background replay loop checks for session validity on every iteration. If the session is dropped, the loop exits immediately to prevent resource leaks.
 
 ## Design & UX Principles: The "Unified Zero-Container HUD"
 
