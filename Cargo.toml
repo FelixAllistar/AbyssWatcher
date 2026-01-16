@@ -1,6 +1,6 @@
 [package]
 name = "abyss-watcher"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Felix Allistar <147667330+FelixAllistar@users.noreply.github.com>"]
 edition = "2021"
 description = "AbyssWatcher Tauri Frontend"
