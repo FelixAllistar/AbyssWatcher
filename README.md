@@ -1,6 +1,6 @@
 # AbyssWatcher
 
-**AbyssWatcher** is a lightweight, always-on-top DPS meter for EVE Online, focused on Abyssal Deadspace, eaturing timestamps on logs, replay, and audio alerts.
+**AbyssWatcher** is a lightweight, always-on-top DPS meter for EVE Online, focused on Abyssal Deadspace, featuring timestamps on logs, replay, and audio alerts.
 
 ## What it does
 
