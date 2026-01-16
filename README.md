@@ -1,6 +1,5 @@
 # AbyssWatcher
 
-![AbyssWatcher](assets/header.svg)
 
 **AbyssWatcher** is a high-performance, always-on-top DPS Meter for EVE Online. Built with [Tauri](https://tauri.app/) (Rust) and React, it provides a zero-clutter HUD for real-time combat analysis.
 
