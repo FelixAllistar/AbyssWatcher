@@ -1,6 +1,6 @@
 # AbyssWatcher
 
-**AbyssWatcher** is a lightweight, always-on-top DPS meter for EVE Online, featuring timestamps on logs, replay, and audio alerts.
+**AbyssWatcher** is a lightweight, always-on-top DPS meter for EVE Online, focused on Abyssal Deadspace, eaturing timestamps on logs, replay, and audio alerts.
 
 ## What it does
 
@@ -16,7 +16,7 @@ Finished a run? Scrub through the whole thing with the timeline. You get a full 
 ![Replay Suite](screenshots/replay-with-timestamps.png)
 
 ### Tactical Alerts
-Get audio pings for the stuff that matters—like being neuted, logi taking damage, or accidentally shooting your friends.
+Get audio pings for the stuff that matters—like being neuted, logi taking damage, or accidentally shooting your other tracked characters (multibox Friendly Fire).
 
 ![Settings and Alerts](screenshots/settings.png)
 
