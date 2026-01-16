@@ -121,7 +121,7 @@ const AlertSettings: FC<AlertSettingsProps> = ({ config, trackedCharacters, onCh
 
                     <div className="char-roles-grid">
                         <div className="role-column">
-                            <label>Logi (Squishy Healer)</label>
+                            <label>Logi</label>
                             {trackedNames.map(char => (
                                 <div key={`logi-${char}`} className="role-checkbox">
                                     <input
@@ -198,7 +198,7 @@ const AlertSettings: FC<AlertSettingsProps> = ({ config, trackedCharacters, onCh
                                             checked={ignoreVorton}
                                             onChange={() => toggleIgnoreVorton(rule.id)}
                                         />
-                                        <span>Ignore Vorton weapons (chain lightning AOE)</span>
+                                        <span>Ignore Vorton weapons</span>
                                     </label>
                                 </div>
                             )}
