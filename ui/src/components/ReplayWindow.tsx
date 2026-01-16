@@ -35,6 +35,20 @@ function ReplayWindow() {
 
     // Hoisted state for log selection
     const [selectedLogs, setSelectedLogs] = useState<Set<string>>(new Set());
+    const [availableLogs, setAvailableLogs] = useState<Record<string, { path: string }[]>>({});
+
+    useEffect(() => {
+        const init = async () => {
+            try {
+                const settings = await invoke<{ gamelog_dir: string }>('get_settings');
+                const logs = await invoke<Record<string, { path: string }[]>>('get_logs_by_character', { path: settings.gamelog_dir });
+                setAvailableLogs(logs);
+            } catch (e) {
+                console.error('Failed to load logs:', e);
+            }
+        };
+        init();
+    }, []);
 
     useEffect(() => {
         const unlistenUpdate = listen<DpsUpdate>('replay-dps-update', (event) => {
@@ -81,6 +95,7 @@ function ReplayWindow() {
         try {
             const settings = await invoke<{ gamelog_dir: string }>('get_settings');
             const logs = await invoke<Record<string, { path: string }[]>>('get_logs_by_character', { path: settings.gamelog_dir });
+            setAvailableLogs(logs);
 
             const selection: [string, string][] = [];
             Object.entries(logs).forEach(([char, files]) => {
@@ -99,6 +114,16 @@ function ReplayWindow() {
             const info = await invoke<ReplaySessionInfo>('start_replay', { logs: selection });
             setStatus(p => ({ ...p, duration: info.duration }));
             setSessionStartTime(info.start_time);
+
+            // Sync characters list with the current selection to remove old ones and show new idle ones
+            const selectedCharNames = Array.from(new Set(selection.map(s => s[0])));
+            setCharacters(selectedCharNames.map(name => ({
+                character: name,
+                path: '',
+                tracked: true
+            })));
+            setDpsData(null); // Clear old stats
+
             setIsPlaying(true); // Auto-play enabled
             setShowLogs(false);
 
@@ -121,15 +146,38 @@ function ReplayWindow() {
     const handleToggleLog = (path: string, checked: boolean) => {
         if (path === '__ALL__' && !checked) {
             setSelectedLogs(new Set());
+            setCharacters(prev => prev.map(c => ({ ...c, tracked: false })));
             return;
         }
 
-        setSelectedLogs(prev => {
-            const next = new Set(prev);
-            if (checked) next.add(path);
-            else next.delete(path);
-            return next;
-        });
+        const nextSelected = new Set(selectedLogs);
+        if (checked) nextSelected.add(path);
+        else nextSelected.delete(path);
+        setSelectedLogs(nextSelected);
+
+        // SYNC tracked status in characters list
+        // Find which character this path belongs to
+        let charName = '';
+        for (const [name, files] of Object.entries(availableLogs)) {
+            if (files.some(f => f.path === path)) {
+                charName = name;
+                break;
+            }
+        }
+
+        if (charName) {
+            setCharacters(prev => {
+                const charLogs = availableLogs[charName] || [];
+                // It is tracked if ANY of its logs are still selected
+                const isTracked = charLogs.some(f => nextSelected.has(f.path));
+
+                // If character exists in state, update it. 
+                // We don't add it here because it will be added on start or update.
+                return prev.map(c =>
+                    c.character === charName ? { ...c, tracked: isTracked } : c
+                );
+            });
+        }
     };
 
     const handlePlayPause = async () => {
