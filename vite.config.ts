@@ -11,14 +11,14 @@ export default defineConfig({
     root: 'ui',
     envDir: '.',
     server: {
-        port: 1420,
+        port: 3000,
         strictPort: true,
         host: host || false,
         hmr: host
             ? {
                 protocol: "ws",
                 host,
-                port: 1421,
+                port: 3001,
             }
             : undefined,
         watch: {

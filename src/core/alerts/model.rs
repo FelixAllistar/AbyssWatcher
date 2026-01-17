@@ -9,7 +9,7 @@ use std::time::Duration;
 /// Unique identifier for hardcoded alert rules
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AlertRuleId {
-    /// Damage from environmental hazards like "Unstable Abyssal Depths"
+    /// Damage from environmental hazards (Out of Bounds)
     EnvironmentalDamage,
     /// Tracked character damaging another tracked character (excluding Vorton)
     FriendlyFire,
@@ -27,7 +27,7 @@ impl AlertRuleId {
     /// Get the display name for this alert
     pub fn display_name(&self) -> &'static str {
         match self {
-            Self::EnvironmentalDamage => "Environmental Damage",
+            Self::EnvironmentalDamage => "Out of Bounds",
             Self::FriendlyFire => "Friendly Fire",
             Self::LogiTakingDamage => "Logi Taking Damage",
             Self::NeutSensitiveNeuted => "Neut Pressure",
@@ -39,7 +39,7 @@ impl AlertRuleId {
     /// Get a description of what this alert does
     pub fn description(&self) -> &'static str {
         match self {
-            Self::EnvironmentalDamage => "Alert when taking damage from Unstable Abyssal Depths",
+            Self::EnvironmentalDamage => "Taking damage from Unstable Abyss",
             Self::FriendlyFire => "Alert when a tracked character damages another tracked character (excludes Vorton weapons)",
             Self::LogiTakingDamage => "Alert when your designated logi character takes incoming damage",
             Self::NeutSensitiveNeuted => "Alert when a designated neut-sensitive character is neuted",
@@ -151,9 +151,24 @@ mod tests {
     }
 
     #[test]
+    fn test_display_names() {
+        assert_eq!(
+            AlertRuleId::EnvironmentalDamage.display_name(),
+            "Out of Bounds"
+        );
+        assert_eq!(AlertRuleId::FriendlyFire.display_name(), "Friendly Fire");
+    }
+
+    #[test]
     fn test_sound_filenames() {
-        assert_eq!(AlertSound::Default.filename(AlertRuleId::EnvironmentalDamage), Some("boundary"));
-        assert_eq!(AlertSound::Default.filename(AlertRuleId::LogiNeuted), Some("logi_neuted"));
+        assert_eq!(
+            AlertSound::Default.filename(AlertRuleId::EnvironmentalDamage),
+            Some("boundary")
+        );
+        assert_eq!(
+            AlertSound::Default.filename(AlertRuleId::LogiNeuted),
+            Some("logi_neuted")
+        );
         assert_eq!(AlertSound::None.filename(AlertRuleId::FriendlyFire), None);
     }
 }

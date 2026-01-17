@@ -25,7 +25,11 @@ pub struct TriggerContext<'a> {
 /// Evaluate a specific trigger against the current context.
 /// Returns Some(message) if the trigger fired, None otherwise.
 /// `ignore_vorton` is passed per-rule for FriendlyFire and LogiTakingDamage.
-pub fn evaluate_trigger(rule_id: AlertRuleId, ctx: &TriggerContext, ignore_vorton: bool) -> Option<String> {
+pub fn evaluate_trigger(
+    rule_id: AlertRuleId,
+    ctx: &TriggerContext,
+    ignore_vorton: bool,
+) -> Option<String> {
     match rule_id {
         AlertRuleId::EnvironmentalDamage => evaluate_environmental_damage(ctx),
         AlertRuleId::FriendlyFire => evaluate_friendly_fire(ctx, ignore_vorton),
@@ -39,16 +43,15 @@ pub fn evaluate_trigger(rule_id: AlertRuleId, ctx: &TriggerContext, ignore_vorto
 /// Alert when taking damage from "Unstable Abyssal Depths"
 fn evaluate_environmental_damage(ctx: &TriggerContext) -> Option<String> {
     const ENVIRONMENTAL_SOURCE: &str = "Unstable Abyssal Depths";
-    
+
     for event in ctx.combat_events {
-        if event.event_type == EventType::Damage 
-            && event.incoming 
-            && event.source.contains(ENVIRONMENTAL_SOURCE) 
+        if event.event_type == EventType::Damage
+            && event.incoming
+            && event.source.contains(ENVIRONMENTAL_SOURCE)
         {
             return Some(format!(
                 "{} taking damage from {}!",
-                event.character,
-                ENVIRONMENTAL_SOURCE
+                event.character, ENVIRONMENTAL_SOURCE
             ));
         }
     }
@@ -67,38 +70,50 @@ fn evaluate_friendly_fire(ctx: &TriggerContext, ignore_vorton: bool) -> Option<S
             println!("[DEBUG FF] Skipping incoming damage event");
             continue;
         }
-        
-        println!("[DEBUG FF] Checking outgoing damage: character='{}', target='{}', weapon='{}'",
-            event.character, event.target, event.weapon);
-        
+
+        println!(
+            "[DEBUG FF] Checking outgoing damage: character='{}', target='{}', weapon='{}'",
+            event.character, event.target, event.weapon
+        );
+
         // Source must be a tracked character
         if !ctx.tracked_characters.contains(&event.character) {
-            println!("[DEBUG FF] Character '{}' not in tracked set", event.character);
+            println!(
+                "[DEBUG FF] Character '{}' not in tracked set",
+                event.character
+            );
             continue;
         }
-        
+
         // Target must also be a tracked character (but not self)
         // Note: target may be decorated like "CharName[CORP](Ship)", so we check if it starts with a tracked name
         let target_is_tracked = ctx.tracked_characters.iter().any(|name| {
-            event.target.starts_with(name) && 
-            (event.target.len() == name.len() || 
-             event.target.chars().nth(name.len()).map_or(false, |c| c == '[' || c == ' '))
+            event.target.starts_with(name)
+                && (event.target.len() == name.len()
+                    || event
+                        .target
+                        .chars()
+                        .nth(name.len())
+                        .map_or(false, |c| c == '[' || c == ' '))
         });
-        
+
         if !target_is_tracked {
             println!("[DEBUG FF] Target '{}' not in tracked set", event.target);
             continue;
         }
-        
+
         // Check for self-damage by comparing the base names
-        let attacker_matches_target = ctx.tracked_characters.iter().any(|name| {
-            event.character == *name && event.target.starts_with(name)
-        });
-        if attacker_matches_target && event.character == event.target.split('[').next().unwrap_or("").trim() {
+        let attacker_matches_target = ctx
+            .tracked_characters
+            .iter()
+            .any(|name| event.character == *name && event.target.starts_with(name));
+        if attacker_matches_target
+            && event.character == event.target.split('[').next().unwrap_or("").trim()
+        {
             println!("[DEBUG FF] Target is same as character (self-damage)");
             continue;
         }
-        
+
         // Optionally exclude Vorton weapons (case-insensitive check)
         if ignore_vorton {
             let weapon_lower = event.weapon.to_lowercase();
@@ -107,15 +122,18 @@ fn evaluate_friendly_fire(ctx: &TriggerContext, ignore_vorton: bool) -> Option<S
                 continue;
             }
         }
-        
+
         // Extract clean target name for the alert message
-        let clean_target = event.target.split('[').next().unwrap_or(&event.target).trim();
-        
+        let clean_target = event
+            .target
+            .split('[')
+            .next()
+            .unwrap_or(&event.target)
+            .trim();
+
         return Some(format!(
             "Friendly fire! {} hit {} with {}",
-            event.character,
-            clean_target,
-            event.weapon
+            event.character, clean_target, event.weapon
         ));
     }
     None
@@ -127,12 +145,12 @@ fn evaluate_logi_taking_damage(ctx: &TriggerContext, ignore_vorton: bool) -> Opt
         if event.event_type != EventType::Damage || !event.incoming {
             continue;
         }
-        
+
         // Check if the character receiving damage is designated as logi
         if !ctx.logi_characters.contains(&event.character) {
             continue;
         }
-        
+
         // Optionally exclude Vorton weapons (chain lightning hits teammates)
         if ignore_vorton {
             let weapon_lower = event.weapon.to_lowercase();
@@ -140,12 +158,10 @@ fn evaluate_logi_taking_damage(ctx: &TriggerContext, ignore_vorton: bool) -> Opt
                 continue;
             }
         }
-        
+
         return Some(format!(
             "LOGI TAKING DAMAGE! {} hit by {} for {:.0}",
-            event.character,
-            event.source,
-            event.amount
+            event.character, event.source, event.amount
         ));
     }
     None
@@ -157,7 +173,7 @@ fn evaluate_neut_sensitive(ctx: &TriggerContext) -> Option<String> {
         if event.event_type != EventType::Neut || !event.incoming {
             continue;
         }
-        
+
         // Check if the character being neuted is designated as neut-sensitive
         if ctx.neut_sensitive_characters.contains(&event.character) {
             // If also logi, skip because LogiNeuted rule handles it
@@ -167,9 +183,7 @@ fn evaluate_neut_sensitive(ctx: &TriggerContext) -> Option<String> {
 
             return Some(format!(
                 "NEUT PRESSURE on {}! {:.0} GJ from {}",
-                event.character,
-                event.amount,
-                event.source
+                event.character, event.amount, event.source
             ));
         }
     }
@@ -182,14 +196,12 @@ fn evaluate_logi_neuted(ctx: &TriggerContext) -> Option<String> {
         if event.event_type != EventType::Neut || !event.incoming {
             continue;
         }
-        
+
         // Check if the character being neuted is designated as logi
         if ctx.logi_characters.contains(&event.character) {
             return Some(format!(
                 "LOGI NEUTED! {} draining {:.0} GJ from {}",
-                event.source,
-                event.amount,
-                event.character
+                event.source, event.amount, event.character
             ));
         }
     }
@@ -201,10 +213,7 @@ fn evaluate_capacitor_failure(ctx: &TriggerContext) -> Option<String> {
     for event in ctx.notify_events {
         return Some(format!(
             "CAP FAILURE! {} can't activate {} (need {:.1}, have {:.1})",
-            event.character,
-            event.module_name,
-            event.required_cap,
-            event.available_cap
+            event.character, event.module_name, event.required_cap, event.available_cap
         ));
     }
     None
@@ -215,8 +224,20 @@ mod tests {
     use super::*;
     use std::time::Duration;
 
-    fn empty_context() -> (Vec<CombatEvent>, Vec<NotifyEvent>, HashSet<String>, HashSet<String>, HashSet<String>) {
-        (Vec::new(), Vec::new(), HashSet::new(), HashSet::new(), HashSet::new())
+    fn empty_context() -> (
+        Vec<CombatEvent>,
+        Vec<NotifyEvent>,
+        HashSet<String>,
+        HashSet<String>,
+        HashSet<String>,
+    ) {
+        (
+            Vec::new(),
+            Vec::new(),
+            HashSet::new(),
+            HashSet::new(),
+            HashSet::new(),
+        )
     }
 
     fn make_combat_event(
@@ -243,7 +264,7 @@ mod tests {
     #[test]
     fn test_environmental_damage_triggers() {
         let (mut combat, notify, tracked, logi, neut) = empty_context();
-        
+
         combat.push(make_combat_event(
             EventType::Damage,
             true, // incoming
@@ -253,7 +274,7 @@ mod tests {
             "Environmental",
             100.0,
         ));
-        
+
         let ctx = TriggerContext {
             combat_events: &combat,
             notify_events: &notify,
@@ -261,7 +282,7 @@ mod tests {
             logi_characters: &logi,
             neut_sensitive_characters: &neut,
         };
-        
+
         let result = evaluate_trigger(AlertRuleId::EnvironmentalDamage, &ctx, false);
         assert!(result.is_some());
         assert!(result.unwrap().contains("Unstable Abyssal Depths"));
@@ -270,10 +291,10 @@ mod tests {
     #[test]
     fn test_friendly_fire_triggers() {
         let (mut combat, notify, mut tracked, logi, neut) = empty_context();
-        
+
         tracked.insert("Pilot1".to_string());
         tracked.insert("Pilot2".to_string());
-        
+
         combat.push(make_combat_event(
             EventType::Damage,
             false, // outgoing
@@ -283,7 +304,7 @@ mod tests {
             "Light Missile Launcher II",
             50.0,
         ));
-        
+
         let ctx = TriggerContext {
             combat_events: &combat,
             notify_events: &notify,
@@ -291,7 +312,7 @@ mod tests {
             logi_characters: &logi,
             neut_sensitive_characters: &neut,
         };
-        
+
         let result = evaluate_trigger(AlertRuleId::FriendlyFire, &ctx, true);
         assert!(result.is_some());
         assert!(result.unwrap().contains("Friendly fire"));
@@ -300,10 +321,10 @@ mod tests {
     #[test]
     fn test_friendly_fire_excludes_vorton() {
         let (mut combat, notify, mut tracked, logi, neut) = empty_context();
-        
+
         tracked.insert("Pilot1".to_string());
         tracked.insert("Pilot2".to_string());
-        
+
         combat.push(make_combat_event(
             EventType::Damage,
             false,
@@ -313,7 +334,7 @@ mod tests {
             "Small Vorton Projector II", // Vorton - should be excluded
             50.0,
         ));
-        
+
         let ctx = TriggerContext {
             combat_events: &combat,
             notify_events: &notify,
@@ -321,17 +342,20 @@ mod tests {
             logi_characters: &logi,
             neut_sensitive_characters: &neut,
         };
-        
+
         let result = evaluate_trigger(AlertRuleId::FriendlyFire, &ctx, true);
-        assert!(result.is_none(), "Vorton damage should not trigger friendly fire");
+        assert!(
+            result.is_none(),
+            "Vorton damage should not trigger friendly fire"
+        );
     }
 
     #[test]
     fn test_logi_taking_damage_triggers() {
         let (mut combat, notify, tracked, mut logi, neut) = empty_context();
-        
+
         logi.insert("LogiPilot".to_string());
-        
+
         combat.push(make_combat_event(
             EventType::Damage,
             true, // incoming
@@ -341,7 +365,7 @@ mod tests {
             "Light Missile",
             30.0,
         ));
-        
+
         let ctx = TriggerContext {
             combat_events: &combat,
             notify_events: &notify,
@@ -349,7 +373,7 @@ mod tests {
             logi_characters: &logi,
             neut_sensitive_characters: &neut,
         };
-        
+
         let result = evaluate_trigger(AlertRuleId::LogiTakingDamage, &ctx, true);
         assert!(result.is_some());
         assert!(result.unwrap().contains("LOGI TAKING DAMAGE"));
@@ -358,9 +382,9 @@ mod tests {
     #[test]
     fn test_logi_taking_damage_excludes_vorton() {
         let (mut combat, notify, tracked, mut logi, neut) = empty_context();
-        
+
         logi.insert("LogiPilot".to_string());
-        
+
         combat.push(make_combat_event(
             EventType::Damage,
             true, // incoming
@@ -370,7 +394,7 @@ mod tests {
             "Small Vorton Projector II", // Vorton - should be excluded
             30.0,
         ));
-        
+
         let ctx = TriggerContext {
             combat_events: &combat,
             notify_events: &notify,
@@ -378,15 +402,18 @@ mod tests {
             logi_characters: &logi,
             neut_sensitive_characters: &neut,
         };
-        
+
         let result = evaluate_trigger(AlertRuleId::LogiTakingDamage, &ctx, true);
-        assert!(result.is_none(), "Vorton damage to logi should not trigger alert when ignore_vorton is true");
+        assert!(
+            result.is_none(),
+            "Vorton damage to logi should not trigger alert when ignore_vorton is true"
+        );
     }
 
     #[test]
     fn test_capacitor_failure_triggers() {
         let (combat, mut notify, tracked, logi, neut) = empty_context();
-        
+
         notify.push(NotifyEvent {
             timestamp: Duration::from_secs(0),
             character: "TestPilot".to_string(),
@@ -394,7 +421,7 @@ mod tests {
             required_cap: 10.0,
             available_cap: 2.0,
         });
-        
+
         let ctx = TriggerContext {
             combat_events: &combat,
             notify_events: &notify,
@@ -402,7 +429,7 @@ mod tests {
             logi_characters: &logi,
             neut_sensitive_characters: &neut,
         };
-        
+
         let result = evaluate_trigger(AlertRuleId::CapacitorFailure, &ctx, false);
         assert!(result.is_some());
         assert!(result.unwrap().contains("CAP FAILURE"));
@@ -411,9 +438,9 @@ mod tests {
     #[test]
     fn test_logi_neuted_triggers() {
         let (mut combat, notify, tracked, mut logi, neut) = empty_context();
-        
+
         logi.insert("LogiPilot".to_string());
-        
+
         combat.push(make_combat_event(
             EventType::Neut,
             true, // incoming
@@ -423,7 +450,7 @@ mod tests {
             "Energy Neutralizer",
             50.0,
         ));
-        
+
         let ctx = TriggerContext {
             combat_events: &combat,
             notify_events: &notify,
@@ -431,7 +458,7 @@ mod tests {
             logi_characters: &logi,
             neut_sensitive_characters: &neut,
         };
-        
+
         let result = evaluate_trigger(AlertRuleId::LogiNeuted, &ctx, false);
         assert!(result.is_some());
         assert!(result.unwrap().contains("LOGI NEUTED"));
@@ -468,7 +495,10 @@ mod tests {
 
         // NeutSensitiveNeuted should NOT fire (because it's a logi char)
         let result_neut = evaluate_trigger(AlertRuleId::NeutSensitiveNeuted, &ctx, false);
-        assert!(result_neut.is_none(), "Neut sensitive alert should NOT fire for logi pilot");
+        assert!(
+            result_neut.is_none(),
+            "Neut sensitive alert should NOT fire for logi pilot"
+        );
     }
 
     #[test]
@@ -512,11 +542,20 @@ mod tests {
 
         // NeutSensitiveNeuted should fire for NeutPilot
         let result_neut = evaluate_trigger(AlertRuleId::NeutSensitiveNeuted, &ctx, false);
-        assert!(result_neut.is_some(), "Neut sensitive alert should fire for NeutPilot");
-        assert!(result_neut.unwrap().contains("NeutPilot"), "Should be for NeutPilot");
+        assert!(
+            result_neut.is_some(),
+            "Neut sensitive alert should fire for NeutPilot"
+        );
+        assert!(
+            result_neut.unwrap().contains("NeutPilot"),
+            "Should be for NeutPilot"
+        );
 
         // LogiNeuted should fire for LogiPilot
         let result_logi = evaluate_trigger(AlertRuleId::LogiNeuted, &ctx, false);
-        assert!(result_logi.is_some(), "Logi alert should fire for LogiPilot");
+        assert!(
+            result_logi.is_some(),
+            "Logi alert should fire for LogiPilot"
+        );
     }
 }

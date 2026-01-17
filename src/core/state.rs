@@ -24,7 +24,6 @@ impl Default for EngineState {
 }
 
 impl EngineState {
-
     pub fn push_event(&mut self, event: CombatEvent) {
         self.events.push(event);
         self.sorted = false;

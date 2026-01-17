@@ -1,7 +1,7 @@
-use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io;
+use std::path::PathBuf;
 
 use super::alerts::engine::AlertEngineConfig;
 
@@ -22,11 +22,10 @@ impl Default for Settings {
         let home = std::env::var("HOME")
             .or_else(|_| std::env::var("USERPROFILE"))
             .unwrap_or_else(|_| ".".to_string());
-        
+
         // This is a rough default, the user will likely change it.
-        let default_path = PathBuf::from(home)
-            .join("Documents/EVE/logs/Gamelogs");
-            
+        let default_path = PathBuf::from(home).join("Documents/EVE/logs/Gamelogs");
+
         Self {
             gamelog_dir: default_path,
             dps_window_seconds: 5,
@@ -88,7 +87,7 @@ mod tests {
 
         manager.save(&new_settings).unwrap();
         let loaded = manager.load();
-        
+
         assert_eq!(loaded.gamelog_dir, PathBuf::from("/tmp/logs"));
         assert_eq!(loaded.dps_window_seconds, 10);
     }

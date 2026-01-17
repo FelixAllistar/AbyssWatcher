@@ -5,15 +5,15 @@
  * - Designate characters as "logi" (squishy healer) or "neut-sensitive"
  * - Enable/disable individual alert rules
  */
-import { type FC } from 'react';
+import { type FC, useState } from 'react';
 import type { AlertEngineConfig, AlertRuleId, CharacterState } from '../types';
 
 // Alert rule metadata for display
 const ALERT_RULES: { id: AlertRuleId; name: string; description: string }[] = [
     {
         id: 'EnvironmentalDamage',
-        name: 'Environmental Damage',
-        description: 'Alert when taking damage from Unstable Abyssal Depths',
+        name: 'Out of Bounds',
+        description: 'Taking damage from Unstable Abyss',
     },
     {
         id: 'FriendlyFire',
@@ -49,6 +49,8 @@ interface AlertSettingsProps {
 }
 
 const AlertSettings: FC<AlertSettingsProps> = ({ config, trackedCharacters, onChange }) => {
+    const [rulesExpanded, setRulesExpanded] = useState(false);
+
     // Get only tracked character names
     const trackedNames = trackedCharacters
         .filter(c => c.tracked)
@@ -111,100 +113,105 @@ const AlertSettings: FC<AlertSettingsProps> = ({ config, trackedCharacters, onCh
 
     return (
         <div className="alert-settings">
-            <h3>Alert Settings</h3>
+            <div className="section-header" onClick={() => setRulesExpanded(!rulesExpanded)}>
+                <h3>Alert Settings</h3>
+                <span className={`collapse-icon ${rulesExpanded ? 'expanded' : ''}`}>▼</span>
+            </div>
 
-            {/* Character Roles */}
-            {trackedNames.length > 0 && (
-                <div className="alert-section">
-                    <h4>Character Roles</h4>
-                    <p className="help-text">Designate special roles for tracked characters</p>
+            {rulesExpanded && (
+                <div className="rules-container">
+                    {/* Character Roles */}
+                    {trackedNames.length > 0 && (
+                        <div className="alert-section">
+                            <h4>Character Roles</h4>
+                            <p className="help-text">Designate special roles for tracked characters</p>
 
-                    <div className="char-roles-grid">
-                        <div className="role-column">
-                            <label>Logi</label>
-                            {trackedNames.map(char => (
-                                <div key={`logi-${char}`} className="role-checkbox">
-                                    <input
-                                        type="checkbox"
-                                        id={`logi-${char}`}
-                                        checked={config.roles.logi_characters.includes(char)}
-                                        onChange={() => toggleLogiChar(char)}
-                                    />
-                                    <label htmlFor={`logi-${char}`}>{char}</label>
+                            <div className="char-roles-grid">
+                                <div className="role-column">
+                                    <label>Logi</label>
+                                    {trackedNames.map(char => (
+                                        <div key={`logi-${char}`} className="role-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                id={`logi-${char}`}
+                                                checked={config.roles.logi_characters.includes(char)}
+                                                onChange={() => toggleLogiChar(char)}
+                                            />
+                                            <label htmlFor={`logi-${char}`}>{char}</label>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
 
-                        <div className="role-column">
-                            <label>Neut-Sensitive</label>
-                            {trackedNames.map(char => (
-                                <div key={`neut-${char}`} className="role-checkbox">
-                                    <input
-                                        type="checkbox"
-                                        id={`neut-${char}`}
-                                        checked={config.roles.neut_sensitive_characters.includes(char)}
-                                        onChange={() => toggleNeutSensitiveChar(char)}
-                                    />
-                                    <label htmlFor={`neut-${char}`}>{char}</label>
+                                <div className="role-column">
+                                    <label>Neut-Sensitive</label>
+                                    {trackedNames.map(char => (
+                                        <div key={`neut-${char}`} className="role-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                id={`neut-${char}`}
+                                                checked={config.roles.neut_sensitive_characters.includes(char)}
+                                                onChange={() => toggleNeutSensitiveChar(char)}
+                                            />
+                                            <label htmlFor={`neut-${char}`}>{char}</label>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
+                            </div>
                         </div>
+                    )}
+
+                    {/* Alert Rules */}
+                    <div className="alert-section">
+                        <h4>Alert Rules</h4>
+
+                        {ALERT_RULES.map(rule => {
+                            const ruleConfig = config.rules[rule.id];
+                            const isEnabled = ruleConfig?.enabled ?? false;
+                            const cooldown = ruleConfig?.cooldown_seconds ?? 3;
+                            const ignoreVorton = ruleConfig?.ignore_vorton ?? true;
+
+                            return (
+                                <div key={rule.id} className="alert-rule">
+                                    <div className="rule-header">
+                                        <label className="rule-toggle">
+                                            <input
+                                                type="checkbox"
+                                                checked={isEnabled}
+                                                onChange={() => toggleRule(rule.id)}
+                                            />
+                                            <span className="rule-name" title={rule.description}>{rule.name}</span>
+                                        </label>
+                                        <div className="rule-cooldown">
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                max={300}
+                                                value={cooldown}
+                                                onChange={(e) => updateCooldown(rule.id, parseInt(e.target.value) || 0)}
+                                                className="cooldown-input"
+                                            />
+                                            <span className="cooldown-label">s</span>
+                                        </div>
+                                    </div>
+
+                                    {(rule.id === 'FriendlyFire' || rule.id === 'LogiTakingDamage') && isEnabled && (
+                                        <div className="rule-filter">
+                                            <label className="filter-checkbox">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={ignoreVorton}
+                                                    onChange={() => toggleIgnoreVorton(rule.id)}
+                                                />
+                                                <span>Ignore Vorton weapons</span>
+                                            </label>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             )}
-
-            {/* Alert Rules */}
-            <div className="alert-section">
-                <h4>Alert Rules</h4>
-
-                {ALERT_RULES.map(rule => {
-                    const ruleConfig = config.rules[rule.id];
-                    // Match backend: missing rules default to disabled (unwrap_or(false))
-                    const isEnabled = ruleConfig?.enabled ?? false;
-                    const cooldown = ruleConfig?.cooldown_seconds ?? 3;
-                    const ignoreVorton = ruleConfig?.ignore_vorton ?? true;
-
-                    return (
-                        <div key={rule.id} className="alert-rule">
-                            <div className="rule-header">
-                                <label className="rule-toggle">
-                                    <input
-                                        type="checkbox"
-                                        checked={isEnabled}
-                                        onChange={() => toggleRule(rule.id)}
-                                    />
-                                    <span className="rule-name" title={rule.description}>{rule.name}</span>
-                                </label>
-                                <div className="rule-cooldown">
-                                    <input
-                                        type="number"
-                                        min={0}
-                                        max={300}
-                                        value={cooldown}
-                                        onChange={(e) => updateCooldown(rule.id, parseInt(e.target.value) || 0)}
-                                        className="cooldown-input"
-                                    />
-                                    <span className="cooldown-label">s</span>
-                                </div>
-                            </div>
-
-                            {/* Vorton filter for FriendlyFire and LogiTakingDamage */}
-                            {(rule.id === 'FriendlyFire' || rule.id === 'LogiTakingDamage') && isEnabled && (
-                                <div className="rule-filter">
-                                    <label className="filter-checkbox">
-                                        <input
-                                            type="checkbox"
-                                            checked={ignoreVorton}
-                                            onChange={() => toggleIgnoreVorton(rule.id)}
-                                        />
-                                        <span>Ignore Vorton weapons</span>
-                                    </label>
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
         </div>
     );
 };

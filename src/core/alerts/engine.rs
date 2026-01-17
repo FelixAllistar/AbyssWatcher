@@ -46,7 +46,8 @@ impl AlertEngineConfig {
 
     /// Get the cooldown for a specific rule in seconds
     pub fn get_cooldown(&self, rule_id: AlertRuleId) -> Duration {
-        let secs = self.rules
+        let secs = self
+            .rules
             .get(&rule_id)
             .map(|c| c.cooldown_seconds)
             .unwrap_or(3);
@@ -89,7 +90,13 @@ impl AlertEngine {
 
         // Build sets from config for trigger context
         let logi_set: HashSet<String> = self.config.roles.logi_characters.iter().cloned().collect();
-        let neut_set: HashSet<String> = self.config.roles.neut_sensitive_characters.iter().cloned().collect();
+        let neut_set: HashSet<String> = self
+            .config
+            .roles
+            .neut_sensitive_characters
+            .iter()
+            .cloned()
+            .collect();
 
         let ctx = TriggerContext {
             combat_events,
@@ -114,7 +121,9 @@ impl AlertEngine {
             }
 
             // Get per-rule ignore_vorton setting (only used by FriendlyFire and LogiTakingDamage)
-            let ignore_vorton = self.config.rules
+            let ignore_vorton = self
+                .config
+                .rules
                 .get(rule_id)
                 .map(|c| c.ignore_vorton)
                 .unwrap_or(true);
@@ -122,7 +131,7 @@ impl AlertEngine {
             // Evaluate trigger
             if let Some(message) = evaluate_trigger(*rule_id, &ctx, ignore_vorton) {
                 self.cooldowns.insert(*rule_id, now);
-                
+
                 // Get timestamp from the first relevant event
                 let timestamp = combat_events
                     .first()
@@ -170,7 +179,11 @@ mod tests {
     #[test]
     fn test_engine_disabled_rule_skipped() {
         let mut config = AlertEngineConfig::default_enabled();
-        config.rules.get_mut(&AlertRuleId::EnvironmentalDamage).unwrap().enabled = false;
+        config
+            .rules
+            .get_mut(&AlertRuleId::EnvironmentalDamage)
+            .unwrap()
+            .enabled = false;
 
         let mut engine = AlertEngine::new(config);
 

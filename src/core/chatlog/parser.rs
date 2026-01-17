@@ -2,10 +2,10 @@
 //!
 //! Handles extracting location change events from Local chat.
 
-use std::time::Duration;
 use chrono::{NaiveDateTime, TimeZone, Utc};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 /// A location change event from Local chat.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -57,12 +57,18 @@ impl ChatlogParser {
         let dt = Utc.from_utc_datetime(&naive);
         let timestamp = Duration::from_secs(dt.timestamp() as u64);
 
-        Some(LocationChange { timestamp, location })
+        Some(LocationChange {
+            timestamp,
+            location,
+        })
     }
 
     /// Parse all location changes from a list of lines.
     pub fn parse_lines(&self, lines: &[String]) -> Vec<LocationChange> {
-        lines.iter().filter_map(|line| self.parse_line(line)).collect()
+        lines
+            .iter()
+            .filter_map(|line| self.parse_line(line))
+            .collect()
     }
 }
 
@@ -147,7 +153,8 @@ mod tests {
         let parser = ChatlogParser::new();
 
         // EVE logs sometimes have BOM characters
-        let line = "\u{feff}[ 2026.01.03 11:26:33 ] EVE System > Channel changed to Local : Torrinos";
+        let line =
+            "\u{feff}[ 2026.01.03 11:26:33 ] EVE System > Channel changed to Local : Torrinos";
         let change = parser.parse_line(line).expect("Should parse with BOM");
         assert_eq!(change.location, "Torrinos");
     }

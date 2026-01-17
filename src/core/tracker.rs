@@ -35,7 +35,7 @@ impl TrackedGamelog {
     pub fn read_new_events(&mut self) -> io::Result<TrackerReadResult> {
         let mut combat_events = Vec::new();
         let mut notify_events = Vec::new();
-        
+
         for line in self.tailer.read_new_lines()? {
             // Try parsing as combat event
             if let Some(event) = self.parser.parse_line(&line, &self.source) {
@@ -46,7 +46,7 @@ impl TrackedGamelog {
                 notify_events.push(notify);
             }
         }
-        
+
         Ok(TrackerReadResult {
             combat_events,
             notify_events,

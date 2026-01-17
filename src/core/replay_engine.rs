@@ -1,9 +1,9 @@
+use super::model::CombatEvent;
+use super::parser::LineParser;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
-use super::model::CombatEvent;
-use super::parser::LineParser;
 
 pub struct MergedStream {
     sources: Vec<LogSource>,
@@ -23,9 +23,9 @@ impl MergedStream {
             let file = File::open(path)?;
             let mut reader = BufReader::new(file);
             let mut parser = LineParser::new();
-            
+
             let next_event = read_next_event(&mut reader, &mut parser, &character);
-            
+
             sources.push(LogSource {
                 reader,
                 character,
@@ -52,7 +52,8 @@ impl MergedStream {
         if let Some(idx) = earliest_idx {
             let source = &mut self.sources[idx];
             let result = source.next_event.take();
-            source.next_event = read_next_event(&mut source.reader, &mut source.parser, &source.character);
+            source.next_event =
+                read_next_event(&mut source.reader, &mut source.parser, &source.character);
             result
         } else {
             None
@@ -60,13 +61,18 @@ impl MergedStream {
     }
 
     pub fn peek_time(&self) -> Option<Duration> {
-        self.sources.iter()
+        self.sources
+            .iter()
             .filter_map(|s| s.next_event.as_ref().map(|(e, _)| e.timestamp))
             .min()
     }
 }
 
-fn read_next_event(reader: &mut BufReader<File>, parser: &mut LineParser, character: &str) -> Option<(CombatEvent, String)> {
+fn read_next_event(
+    reader: &mut BufReader<File>,
+    parser: &mut LineParser,
+    character: &str,
+) -> Option<(CombatEvent, String)> {
     let mut line = String::new();
     while reader.read_line(&mut line).ok()? > 0 {
         let trimmed = line.trim();
@@ -91,11 +97,11 @@ pub struct ReplayController {
     stream: MergedStream,
     state: PlaybackState,
     speed: f64,
-    
+
     session_start_time: Duration,
     session_duration: Duration,
     session_epoch_start: u64,
-    
+
     current_sim_time: Duration,
     last_update_wall_time: SystemTime,
 }
@@ -103,18 +109,18 @@ pub struct ReplayController {
 impl ReplayController {
     pub fn new(paths: Vec<(String, PathBuf)>) -> Option<Self> {
         let stream = MergedStream::new(paths.clone()).ok()?;
-        
+
         // Calculate absolute epoch start (earliest session start)
         let mut min_epoch = u64::MAX;
         for source in &stream.sources {
             if let Some(base) = source.parser.get_base_time() {
-                 let epoch = base.and_utc().timestamp() as u64;
-                 if epoch < min_epoch {
-                     min_epoch = epoch;
-                 }
+                let epoch = base.and_utc().timestamp() as u64;
+                if epoch < min_epoch {
+                    min_epoch = epoch;
+                }
             }
         }
-        
+
         // If we found a valid session start, use it.
         // If we didn't find any session headers, we can't really replay.
         if min_epoch == u64::MAX {
@@ -124,7 +130,7 @@ impl ReplayController {
 
         // Try to peek first event time, OR default to 0 duration if no events
         let start_time = stream.peek_time().unwrap_or(Duration::ZERO);
-        
+
         let mut end_time = start_time;
         for (_, path) in &paths {
             if let Ok(events) = super::log_io::read_full_events(path) {
@@ -186,7 +192,9 @@ impl ReplayController {
 
     pub fn tick(&mut self) -> (Vec<CombatEvent>, Vec<String>) {
         let now = SystemTime::now();
-        let elapsed_wall = now.duration_since(self.last_update_wall_time).unwrap_or(Duration::ZERO);
+        let elapsed_wall = now
+            .duration_since(self.last_update_wall_time)
+            .unwrap_or(Duration::ZERO);
         self.last_update_wall_time = now;
 
         if self.state == PlaybackState::Paused {
@@ -214,9 +222,10 @@ impl ReplayController {
     pub fn current_sim_time(&self) -> Duration {
         self.current_sim_time
     }
-    
+
     pub fn relative_progress(&self) -> Duration {
-        self.current_sim_time.saturating_sub(self.session_start_time)
+        self.current_sim_time
+            .saturating_sub(self.session_start_time)
     }
 }
 
@@ -229,30 +238,43 @@ mod tests {
     #[test]
     fn test_merged_stream_chronological() {
         let dir = tempdir().unwrap();
-        
+
         let path_a = dir.path().join("A.txt");
         let mut f_a = File::create(&path_a).unwrap();
-        writeln!(f_a, "[ 2024.01.01 12:00:00 ] (combat) 10 from A to X [ Gun ]").unwrap();
-        writeln!(f_a, "[ 2024.01.01 12:00:10 ] (combat) 10 from A to X [ Gun ]").unwrap();
-        
+        writeln!(
+            f_a,
+            "[ 2024.01.01 12:00:00 ] (combat) 10 from A to X [ Gun ]"
+        )
+        .unwrap();
+        writeln!(
+            f_a,
+            "[ 2024.01.01 12:00:10 ] (combat) 10 from A to X [ Gun ]"
+        )
+        .unwrap();
+
         let path_b = dir.path().join("B.txt");
         let mut f_b = File::create(&path_b).unwrap();
-        writeln!(f_b, "[ 2024.01.01 12:00:05 ] (combat) 10 from B to X [ Gun ]").unwrap();
+        writeln!(
+            f_b,
+            "[ 2024.01.01 12:00:05 ] (combat) 10 from B to X [ Gun ]"
+        )
+        .unwrap();
 
         let mut stream = MergedStream::new(vec![
             ("CharA".to_string(), path_a),
             ("CharB".to_string(), path_b),
-        ]).unwrap();
+        ])
+        .unwrap();
 
         let e1 = stream.next_event().unwrap();
         assert_eq!(e1.0.source, "CharA");
-        
+
         let e2 = stream.next_event().unwrap();
         assert_eq!(e2.0.source, "CharB");
-        
+
         let e3 = stream.next_event().unwrap();
         assert_eq!(e3.0.source, "CharA");
-        
+
         assert!(stream.next_event().is_none());
     }
 
@@ -265,13 +287,13 @@ mod tests {
         writeln!(f, "[ 2024.01.01 12:00:01 ] (combat) 10 from A to X [ Gun ]").unwrap();
 
         let mut ctrl = ReplayController::new(vec![("A".to_string(), path)]).unwrap();
-        
+
         ctrl.set_state(PlaybackState::Playing);
         let events = ctrl.tick();
         assert_eq!(events.0.len(), 1);
-        
+
         ctrl.set_speed(10.0);
-        std::thread::sleep(Duration::from_millis(150)); 
+        std::thread::sleep(Duration::from_millis(150));
         let events = ctrl.tick();
         assert_eq!(events.0.len(), 1);
     }

@@ -5,11 +5,11 @@
 //!
 //! This allows bookmarks to travel with the log file and be parsed during replay.
 
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::path::Path;
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 
 /// Types of bookmarks that can be placed in a gamelog
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -37,7 +37,7 @@ impl BookmarkType {
             BookmarkType::Highlight => "HIGHLIGHT",
         }
     }
-    
+
     /// Parse from string
     pub fn from_str(s: &str) -> Option<Self> {
         match s.trim() {
@@ -63,25 +63,27 @@ pub struct InlineBookmark {
 }
 
 /// Append a bookmark line to a gamelog file.
-pub fn append_bookmark(gamelog_path: &Path, bookmark_type: &str, label: Option<&str>) -> io::Result<()> {
-    let mut file = OpenOptions::new()
-        .append(true)
-        .open(gamelog_path)?;
-    
+pub fn append_bookmark(
+    gamelog_path: &Path,
+    bookmark_type: &str,
+    label: Option<&str>,
+) -> io::Result<()> {
+    let mut file = OpenOptions::new().append(true).open(gamelog_path)?;
+
     // Format timestamp like EVE logs: "2026.01.04 03:56:49"
     let now: DateTime<Utc> = Utc::now();
     let timestamp = now.format("%Y.%m.%d %H:%M:%S");
-    
+
     // Format: [ TIMESTAMP ] (bookmark) TYPE: label
     let line = if let Some(lbl) = label {
         format!("[ {} ] (bookmark) {}: {}\n", timestamp, bookmark_type, lbl)
     } else {
         format!("[ {} ] (bookmark) {}\n", timestamp, bookmark_type)
     };
-    
+
     file.write_all(line.as_bytes())?;
     file.sync_all()?;
-    
+
     Ok(())
 }
 
@@ -115,20 +117,24 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::tempdir;
-    
+
     #[test]
     fn test_append_bookmark() {
         let dir = tempdir().unwrap();
         let log = dir.path().join("test.txt");
-        
+
         // Create initial log file
-        fs::write(&log, "[ 2026.01.04 03:00:00 ] (combat) 100 from Me to Target\n").unwrap();
-        
+        fs::write(
+            &log,
+            "[ 2026.01.04 03:00:00 ] (combat) 100 from Me to Target\n",
+        )
+        .unwrap();
+
         // Add bookmarks
         add_highlight(&log, Some("Important!")).unwrap();
         add_room_start(&log).unwrap();
         add_room_end(&log).unwrap();
-        
+
         // Read back
         let content = fs::read_to_string(&log).unwrap();
         assert!(content.contains("(bookmark) HIGHLIGHT: Important!"));

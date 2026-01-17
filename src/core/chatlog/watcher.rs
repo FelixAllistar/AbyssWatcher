@@ -2,9 +2,9 @@
 //!
 //! Tails Local chat logs to detect location changes in real-time.
 
+use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::collections::HashMap;
 
 use super::parser::{ChatlogParser, LocationChange};
 use crate::core::discovery;
@@ -110,11 +110,7 @@ impl ChatlogWatcher {
             }
         };
 
-        let tracker = LocalChatlogTracker::new(
-            character_name.to_string(),
-            character_id,
-            path,
-        )?;
+        let tracker = LocalChatlogTracker::new(character_name.to_string(), character_id, path)?;
         self.trackers.insert(character_id, tracker);
         Ok(true)
     }
@@ -147,12 +143,17 @@ impl ChatlogWatcher {
 
     /// Get the last known location for a character.
     pub fn last_location(&self, character_id: u64) -> Option<&str> {
-        self.trackers.get(&character_id).and_then(|t| t.last_location())
+        self.trackers
+            .get(&character_id)
+            .and_then(|t| t.last_location())
     }
 
     /// Check if a character is currently in the Abyss.
     pub fn is_in_abyss(&self, character_id: u64) -> bool {
-        self.trackers.get(&character_id).map(|t| t.is_in_abyss()).unwrap_or(false)
+        self.trackers
+            .get(&character_id)
+            .map(|t| t.is_in_abyss())
+            .unwrap_or(false)
     }
 
     /// Get all tracked character IDs.
@@ -176,15 +177,27 @@ mod tests {
 
     fn create_local_chatlog(path: &Path, char_name: &str) {
         let mut file = File::create(path).unwrap();
-        writeln!(file, "---------------------------------------------------------------").unwrap();
+        writeln!(
+            file,
+            "---------------------------------------------------------------"
+        )
+        .unwrap();
         writeln!(file).unwrap();
         writeln!(file, "  Channel ID:      local").unwrap();
         writeln!(file, "  Channel Name:    Local").unwrap();
         writeln!(file, "  Listener:        {}", char_name).unwrap();
         writeln!(file, "  Session started: 2026.01.03 11:26:30").unwrap();
-        writeln!(file, "---------------------------------------------------------------").unwrap();
+        writeln!(
+            file,
+            "---------------------------------------------------------------"
+        )
+        .unwrap();
         writeln!(file).unwrap();
-        writeln!(file, "[ 2026.01.03 11:26:33 ] EVE System > Channel changed to Local : Torrinos").unwrap();
+        writeln!(
+            file,
+            "[ 2026.01.03 11:26:33 ] EVE System > Channel changed to Local : Torrinos"
+        )
+        .unwrap();
     }
 
     #[test]
@@ -193,11 +206,8 @@ mod tests {
         let path = dir.path().join("Local_20260103_112630_12345.txt");
         create_local_chatlog(&path, "TestChar");
 
-        let mut tracker = LocalChatlogTracker::new(
-            "TestChar".to_string(),
-            12345,
-            path.clone(),
-        ).unwrap();
+        let mut tracker =
+            LocalChatlogTracker::new("TestChar".to_string(), 12345, path.clone()).unwrap();
 
         // Rewind to read from the beginning (LogTailer starts at end by default)
         tracker.rewind().unwrap();
@@ -213,7 +223,11 @@ mod tests {
             .append(true)
             .open(&path)
             .unwrap();
-        writeln!(file, "[ 2026.01.03 11:30:05 ] EVE System > Channel changed to Local : Unknown").unwrap();
+        writeln!(
+            file,
+            "[ 2026.01.03 11:30:05 ] EVE System > Channel changed to Local : Unknown"
+        )
+        .unwrap();
         file.sync_all().unwrap();
 
         // Read again
@@ -226,7 +240,7 @@ mod tests {
     #[test]
     fn test_chatlog_watcher() {
         let dir = tempdir().unwrap();
-        
+
         // Create a local chatlog
         let path = dir.path().join("Local_20260103_112630_12345.txt");
         create_local_chatlog(&path, "TestChar");
@@ -234,7 +248,9 @@ mod tests {
         let mut watcher = ChatlogWatcher::new();
 
         // Start tracking (by ID)
-        let started = watcher.start_tracking(dir.path(), "TestChar", 12345).unwrap();
+        let started = watcher
+            .start_tracking(dir.path(), "TestChar", 12345)
+            .unwrap();
         assert!(started);
 
         // Rewind to read from the beginning for test

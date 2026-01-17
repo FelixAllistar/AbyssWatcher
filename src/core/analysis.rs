@@ -61,7 +61,7 @@ pub fn compute_dps_series(
     }
 
     let global_start_cutoff = Duration::from_millis(start_millis.saturating_sub(window_millis));
-    
+
     let mut start_idx = events.partition_point(|e| e.timestamp < global_start_cutoff);
     let mut end_idx = start_idx;
 
@@ -73,7 +73,7 @@ pub fn compute_dps_series(
     let mut incoming_cap_sum = 0.0_f32;
     let mut outgoing_neut_sum = 0.0_f32;
     let mut incoming_neut_sum = 0.0_f32;
-    
+
     let mut outgoing_by_weapon_damage: HashMap<WeaponName, f32> = HashMap::new();
     let mut outgoing_by_target_damage: HashMap<EntityName, f32> = HashMap::new();
     let mut incoming_by_source_damage: HashMap<EntityName, f32> = HashMap::new();
@@ -106,7 +106,7 @@ pub fn compute_dps_series(
                         *incoming_by_character_damage
                             .entry(event.character.clone())
                             .or_insert(0.0) += event.amount;
-                    },
+                    }
                     EventType::Repair => incoming_hps_sum += event.amount,
                     EventType::Capacitor => incoming_cap_sum += event.amount,
                     EventType::Neut => incoming_neut_sum += event.amount,
@@ -114,7 +114,12 @@ pub fn compute_dps_series(
                 *char_actions_map
                     .entry(event.character.clone())
                     .or_default()
-                    .entry((event.weapon.clone(), String::new(), event.event_type.clone(), true))
+                    .entry((
+                        event.weapon.clone(),
+                        String::new(),
+                        event.event_type.clone(),
+                        true,
+                    ))
                     .or_insert(0.0) += event.amount;
             } else {
                 // Outgoing logic
@@ -122,7 +127,12 @@ pub fn compute_dps_series(
                 *char_actions_map
                     .entry(event.character.clone())
                     .or_default()
-                    .entry((event.weapon.clone(), event.target.clone(), event.event_type.clone(), false))
+                    .entry((
+                        event.weapon.clone(),
+                        event.target.clone(),
+                        event.event_type.clone(),
+                        false,
+                    ))
                     .or_insert(0.0) += event.amount;
 
                 match event.event_type {
@@ -147,13 +157,13 @@ pub fn compute_dps_series(
                             .or_default()
                             .entry(event.target.clone())
                             .or_insert(0.0) += event.amount;
-                    },
+                    }
                     EventType::Repair => {
                         outgoing_hps_sum += event.amount;
-                    },
+                    }
                     EventType::Capacitor => {
                         outgoing_cap_sum += event.amount;
-                    },
+                    }
                     EventType::Neut => {
                         outgoing_neut_sum += event.amount;
                     }
@@ -170,8 +180,17 @@ pub fn compute_dps_series(
 
             // Clean up combat actions map - runs for BOTH incoming and outgoing events
             if let Some(char_actions) = char_actions_map.get_mut(&event.character) {
-                let target_key = if event.incoming { String::new() } else { event.target.clone() };
-                let key = (event.weapon.clone(), target_key, event.event_type.clone(), event.incoming);
+                let target_key = if event.incoming {
+                    String::new()
+                } else {
+                    event.target.clone()
+                };
+                let key = (
+                    event.weapon.clone(),
+                    target_key,
+                    event.event_type.clone(),
+                    event.incoming,
+                );
                 if let Some(val) = char_actions.get_mut(&key) {
                     *val -= event.amount;
                     if *val <= 0.0 {
@@ -193,13 +212,14 @@ pub fn compute_dps_series(
                                 incoming_by_source_damage.remove(&event.source);
                             }
                         }
-                        if let Some(value) = incoming_by_character_damage.get_mut(&event.character) {
+                        if let Some(value) = incoming_by_character_damage.get_mut(&event.character)
+                        {
                             *value -= event.amount;
                             if *value <= 0.0 {
                                 incoming_by_character_damage.remove(&event.character);
                             }
                         }
-                    },
+                    }
                     EventType::Repair => incoming_hps_sum -= event.amount,
                     EventType::Capacitor => incoming_cap_sum -= event.amount,
                     EventType::Neut => incoming_neut_sum -= event.amount,
@@ -220,13 +240,15 @@ pub fn compute_dps_series(
                                 outgoing_by_target_damage.remove(&event.target);
                             }
                         }
-                        if let Some(value) = outgoing_by_character_damage.get_mut(&event.character) {
+                        if let Some(value) = outgoing_by_character_damage.get_mut(&event.character)
+                        {
                             *value -= event.amount;
                             if *value <= 0.0 {
                                 outgoing_by_character_damage.remove(&event.character);
                             }
                         }
-                        if let Some(char_weapons) = outgoing_by_char_weapon_damage.get_mut(&event.character)
+                        if let Some(char_weapons) =
+                            outgoing_by_char_weapon_damage.get_mut(&event.character)
                         {
                             if let Some(damage) = char_weapons.get_mut(&event.weapon) {
                                 *damage -= event.amount;
@@ -238,7 +260,8 @@ pub fn compute_dps_series(
                                 outgoing_by_char_weapon_damage.remove(&event.character);
                             }
                         }
-                        if let Some(char_targets) = outgoing_by_char_target_damage.get_mut(&event.character)
+                        if let Some(char_targets) =
+                            outgoing_by_char_target_damage.get_mut(&event.character)
                         {
                             if let Some(damage) = char_targets.get_mut(&event.target) {
                                 *damage -= event.amount;
@@ -250,13 +273,13 @@ pub fn compute_dps_series(
                                 outgoing_by_char_target_damage.remove(&event.character);
                             }
                         }
-                    },
+                    }
                     EventType::Repair => {
                         outgoing_hps_sum -= event.amount;
-                    },
+                    }
                     EventType::Capacitor => {
                         outgoing_cap_sum -= event.amount;
-                    },
+                    }
                     EventType::Neut => {
                         outgoing_neut_sum -= event.amount;
                     }
@@ -324,7 +347,10 @@ pub fn compute_dps_series(
             .iter()
             .map(|(character, actions)| {
                 // Group by (weapon, EventType, incoming) and collect targets
-                let mut weapon_groups: HashMap<(String, EventType, bool), (f32, Vec<super::model::TargetHit>)> = HashMap::new();
+                let mut weapon_groups: HashMap<
+                    (String, EventType, bool),
+                    (f32, Vec<super::model::TargetHit>),
+                > = HashMap::new();
                 for ((weapon, target, event_type, incoming), value) in actions {
                     let entry = weapon_groups
                         .entry((weapon.clone(), event_type.clone(), *incoming))
@@ -344,7 +370,11 @@ pub fn compute_dps_series(
                         .into_iter()
                         .map(|((name, action_type, incoming), (total, mut targets))| {
                             // Sort targets by value descending
-                            targets.sort_by(|a, b| b.value.partial_cmp(&a.value).unwrap_or(std::cmp::Ordering::Equal));
+                            targets.sort_by(|a, b| {
+                                b.value
+                                    .partial_cmp(&a.value)
+                                    .unwrap_or(std::cmp::Ordering::Equal)
+                            });
                             super::model::CombatAction {
                                 name,
                                 action_type,
@@ -474,9 +504,9 @@ mod tests {
                 incoming: false,
                 character: "Pilot".to_string(),
                 event_type: EventType::Repair,
-            }
+            },
         ];
-        
+
         let samples = compute_dps_series(&events, Duration::from_secs(1), Duration::from_secs(1));
         let sample = &samples[1];
 
@@ -541,18 +571,16 @@ mod tests {
     #[test]
     fn expires_incoming_events_from_actions_map() {
         // Create an incoming damage event at t=1s with a 1s window
-        let events = vec![
-            CombatEvent {
-                timestamp: Duration::from_secs(1),
-                source: "Enemy".to_string(),
-                target: "Pilot".to_string(),
-                weapon: "NPC Attack".to_string(),
-                amount: 100.0,
-                incoming: true,
-                character: "Pilot".to_string(),
-                event_type: EventType::Damage,
-            },
-        ];
+        let events = vec![CombatEvent {
+            timestamp: Duration::from_secs(1),
+            source: "Enemy".to_string(),
+            target: "Pilot".to_string(),
+            weapon: "NPC Attack".to_string(),
+            amount: 100.0,
+            incoming: true,
+            character: "Pilot".to_string(),
+            event_type: EventType::Damage,
+        }];
 
         // Sample at t=3s (2 seconds after event, window is 1s)
         let samples = compute_dps_series(&events, Duration::from_secs(1), Duration::from_secs(3));
@@ -560,7 +588,9 @@ mod tests {
 
         // The incoming event should have expired from the window
         assert!(
-            !sample_at_3s.combat_actions_by_character.contains_key("Pilot"),
+            !sample_at_3s
+                .combat_actions_by_character
+                .contains_key("Pilot"),
             "Incoming events should be removed from actions map after window expires"
         );
         assert_eq!(

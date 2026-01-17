@@ -78,15 +78,15 @@ pub struct DpsSample {
     pub incoming_cap: f32, // New
     pub outgoing_neut: f32,
     pub incoming_neut: f32, // New
-    
+
     // Detailed breakdowns
     pub outgoing_by_weapon: HashMap<WeaponName, f32>,
     pub outgoing_by_target: HashMap<EntityName, f32>,
     pub incoming_by_source: HashMap<EntityName, f32>,
-    
+
     pub outgoing_by_character: HashMap<String, f32>,
     pub incoming_by_character: HashMap<String, f32>,
-    
+
     // Per-character detailed maps
     // DEPRECATED: Use combat_actions_by_character instead for unified display
     pub outgoing_by_char_weapon: HashMap<String, HashMap<WeaponName, f32>>,

@@ -1,10 +1,10 @@
+use chrono::{NaiveDateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-use chrono::{NaiveDateTime, TimeZone, Utc};
 
 use super::model::CombatEvent;
 use super::parser;
@@ -29,10 +29,10 @@ impl LogTailer {
         let path_ref = path.as_ref();
         let mut file = File::open(path_ref)?;
         let metadata = file.metadata()?;
-        
+
         // Detect encoding by checking for UTF-16LE BOM (FF FE)
         let encoding = Self::detect_encoding(&mut file)?;
-        
+
         let position = metadata.len();
         Ok(Self {
             file,
@@ -41,19 +41,19 @@ impl LogTailer {
             encoding,
         })
     }
-    
+
     /// Detect file encoding by checking for BOM
     fn detect_encoding(file: &mut File) -> io::Result<LogEncoding> {
         let mut bom = [0u8; 2];
         file.seek(SeekFrom::Start(0))?;
-        
+
         if file.read(&mut bom)? >= 2 {
             // UTF-16LE BOM: FF FE
             if bom[0] == 0xFF && bom[1] == 0xFE {
                 return Ok(LogEncoding::Utf16Le);
             }
         }
-        
+
         file.seek(SeekFrom::Start(0))?;
         Ok(LogEncoding::Utf8)
     }
@@ -64,7 +64,7 @@ impl LogTailer {
             LogEncoding::Utf16Le => self.read_utf16le_lines(),
         }
     }
-    
+
     fn read_utf8_lines(&mut self) -> io::Result<Vec<String>> {
         let mut lines = Vec::new();
 
@@ -85,41 +85,42 @@ impl LogTailer {
 
         Ok(lines)
     }
-    
+
     fn read_utf16le_lines(&mut self) -> io::Result<Vec<String>> {
         let mut lines = Vec::new();
-        
+
         self.file.seek(SeekFrom::Start(self.position))?;
-        
+
         // Read all remaining bytes
         let mut bytes = Vec::new();
         self.file.read_to_end(&mut bytes)?;
-        
+
         if bytes.is_empty() {
             return Ok(lines);
         }
-        
+
         // Convert UTF-16LE to String
         // Skip BOM if at start of file
-        let start = if self.position == 0 && bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE {
-            2
-        } else {
-            0
-        };
-        
+        let start =
+            if self.position == 0 && bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE {
+                2
+            } else {
+                0
+            };
+
         let u16_units: Vec<u16> = bytes[start..]
             .chunks_exact(2)
             .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
             .collect();
-        
+
         let text = String::from_utf16_lossy(&u16_units);
-        
+
         for line in text.lines() {
             lines.push(line.to_string());
         }
-        
+
         self.position += bytes.len() as u64;
-        
+
         Ok(lines)
     }
 
@@ -133,7 +134,7 @@ impl LogTailer {
     pub fn path(&self) -> &Path {
         &self.path
     }
-    
+
     #[allow(dead_code)]
     pub fn encoding(&self) -> LogEncoding {
         self.encoding
@@ -161,7 +162,7 @@ fn extract_header_info(path: &Path) -> io::Result<Option<(String, SystemTime)>> 
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
     let mut buffer = String::new();
-    
+
     let mut character = None;
     let mut timestamp = None;
 
@@ -181,16 +182,16 @@ fn extract_header_info(path: &Path) -> io::Result<Option<(String, SystemTime)>> 
                 timestamp = Some(SystemTime::from(Utc.from_utc_datetime(&naive)));
             }
         }
-        
+
         if character.is_some() && timestamp.is_some() {
             return Ok(Some((character.unwrap(), timestamp.unwrap())));
         }
     }
-    
+
     // Fallback: If we found character but no timestamp, we might return None or use SystemTime::UNIX_EPOCH?
     // Let's adhere to previous strictness: if we can't fully parse, return None (or at least Character is mandatory).
     if let Some(c) = character {
-         return Ok(Some((c, timestamp.unwrap_or(SystemTime::UNIX_EPOCH))));
+        return Ok(Some((c, timestamp.unwrap_or(SystemTime::UNIX_EPOCH))));
     }
 
     Ok(None)
@@ -228,7 +229,7 @@ pub fn scan_all_logs(dir: impl AsRef<Path>) -> io::Result<Vec<CharacterLog>> {
             });
         }
     }
-    
+
     logs.sort_by(|a, b| b.session_start.cmp(&a.session_start));
     Ok(logs)
 }
@@ -297,17 +298,25 @@ pub fn read_full_events(path: impl AsRef<Path>) -> io::Result<Vec<CombatEvent>> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
     use std::io::Write;
     use std::time::Duration;
+    use tempfile::tempdir;
 
     fn create_dummy_log(path: PathBuf, char_name: &str, time_str: &str) {
         let mut file = File::create(path).unwrap();
-        writeln!(file, "------------------------------------------------------------").unwrap();
+        writeln!(
+            file,
+            "------------------------------------------------------------"
+        )
+        .unwrap();
         writeln!(file, "  Gamelog").unwrap();
         writeln!(file, "  Listener: {}", char_name).unwrap();
         writeln!(file, "  Session Started: {}", time_str).unwrap();
-        writeln!(file, "------------------------------------------------------------").unwrap();
+        writeln!(
+            file,
+            "------------------------------------------------------------"
+        )
+        .unwrap();
     }
 
     #[test]
@@ -319,7 +328,7 @@ mod tests {
 
         // scan_gamelogs_dir only returns the latest per character
         let logs = scan_gamelogs_dir(dir.path()).unwrap();
-        assert_eq!(logs.len(), 1); 
+        assert_eq!(logs.len(), 1);
         assert_eq!(logs[0].path.file_name().unwrap(), "new.txt");
 
         // We want a function that returns ALL logs

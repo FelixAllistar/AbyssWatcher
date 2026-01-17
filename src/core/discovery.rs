@@ -45,12 +45,12 @@ pub struct LogHeader {
 fn extract_character_id_from_filename(filename: &str) -> Option<u64> {
     let name = filename.strip_suffix(".txt").unwrap_or(filename);
     let parts: Vec<&str> = name.split('_').collect();
-    
+
     // Chatlog pattern: ["Local", "20260103", "174237", "2112699440"] - 4 parts
     if parts.len() >= 4 && parts[0] == "Local" {
         return parts.last().and_then(|s| s.parse().ok());
     }
-    
+
     // Gamelog pattern: ["20260103", "221507", "2114264203"] - 3 parts
     // The third segment is the character ID
     if parts.len() >= 3 {
@@ -59,7 +59,7 @@ fn extract_character_id_from_filename(filename: &str) -> Option<u64> {
             return parts.get(2).and_then(|s| s.parse().ok());
         }
     }
-    
+
     None
 }
 
@@ -71,7 +71,7 @@ fn extract_character_id_from_filename(filename: &str) -> Option<u64> {
 pub fn extract_header(path: &Path, log_type: LogType) -> io::Result<Option<LogHeader>> {
     let mut file = File::open(path)?;
     let metadata = fs::metadata(path)?;
-    
+
     // Detect encoding by checking for UTF-16LE BOM (FF FE)
     let mut bom = [0u8; 2];
     let is_utf16le = if file.read(&mut bom)? >= 2 {
@@ -79,7 +79,7 @@ pub fn extract_header(path: &Path, log_type: LogType) -> io::Result<Option<LogHe
     } else {
         false
     };
-    
+
     // Read header lines based on encoding
     let header_text = if is_utf16le {
         read_utf16le_header(&mut file)?
@@ -125,10 +125,7 @@ pub fn extract_header(path: &Path, log_type: LogType) -> io::Result<Option<LogHe
         None => return Ok(None),
     };
 
-    let filename = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
+    let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
     let character_id = extract_character_id_from_filename(filename);
 
     Ok(Some(LogHeader {
@@ -148,7 +145,7 @@ fn read_utf8_header(file: &mut File) -> io::Result<String> {
     let mut reader = io::BufReader::new(file);
     let mut result = String::new();
     let mut buffer = String::new();
-    
+
     for _ in 0..20 {
         buffer.clear();
         if reader.read_line(&mut buffer)? == 0 {
@@ -156,7 +153,7 @@ fn read_utf8_header(file: &mut File) -> io::Result<String> {
         }
         result.push_str(&buffer);
     }
-    
+
     Ok(result)
 }
 
@@ -164,7 +161,7 @@ fn read_utf8_header(file: &mut File) -> io::Result<String> {
 fn read_utf16le_header(file: &mut File) -> io::Result<String> {
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer)?;
-    
+
     // Skip BOM if present
     let data = if buffer.len() >= 2 && buffer[0] == 0xFF && buffer[1] == 0xFE {
         &buffer[2..]
@@ -184,7 +181,7 @@ pub fn read_log_file(path: &Path) -> io::Result<String> {
     let mut f = File::open(path)?;
     let mut buffer = Vec::new();
     f.read_to_end(&mut buffer)?;
-    
+
     if buffer.len() >= 2 && buffer[0] == 0xFF && buffer[1] == 0xFE {
         // UTF-16LE
         let u16_units: Vec<u16> = buffer[2..]
@@ -194,8 +191,7 @@ pub fn read_log_file(path: &Path) -> io::Result<String> {
         Ok(String::from_utf16_lossy(&u16_units))
     } else {
         // Assume UTF-8 / ASCII
-        String::from_utf8(buffer)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        String::from_utf8(buffer).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 }
 
@@ -280,7 +276,10 @@ pub fn find_local_chatlog(chatlog_dir: &Path, character_id: u64) -> io::Result<O
 }
 
 /// Find the most recent Local chat log by character name.
-pub fn find_local_chatlog_by_name(chatlog_dir: &Path, character_name: &str) -> io::Result<Option<PathBuf>> {
+pub fn find_local_chatlog_by_name(
+    chatlog_dir: &Path,
+    character_name: &str,
+) -> io::Result<Option<PathBuf>> {
     let logs = scan_logs_dir(chatlog_dir, Some("Local"), LogType::Chatlog)?;
 
     // Find logs matching the character name
@@ -300,22 +299,38 @@ mod tests {
 
     fn create_gamelog(path: &Path, char_name: &str, time_str: &str) {
         let mut file = File::create(path).unwrap();
-        writeln!(file, "------------------------------------------------------------").unwrap();
+        writeln!(
+            file,
+            "------------------------------------------------------------"
+        )
+        .unwrap();
         writeln!(file, "  Gamelog").unwrap();
         writeln!(file, "  Listener: {}", char_name).unwrap();
         writeln!(file, "  Session Started: {}", time_str).unwrap();
-        writeln!(file, "------------------------------------------------------------").unwrap();
+        writeln!(
+            file,
+            "------------------------------------------------------------"
+        )
+        .unwrap();
     }
 
     fn create_chatlog(path: &Path, char_name: &str, time_str: &str) {
         let mut file = File::create(path).unwrap();
-        writeln!(file, "---------------------------------------------------------------").unwrap();
+        writeln!(
+            file,
+            "---------------------------------------------------------------"
+        )
+        .unwrap();
         writeln!(file).unwrap();
         writeln!(file, "  Channel ID:      local").unwrap();
         writeln!(file, "  Channel Name:    Local").unwrap();
         writeln!(file, "  Listener:        {}", char_name).unwrap();
         writeln!(file, "  Session started: {}", time_str).unwrap();
-        writeln!(file, "---------------------------------------------------------------").unwrap();
+        writeln!(
+            file,
+            "---------------------------------------------------------------"
+        )
+        .unwrap();
     }
 
     #[test]
@@ -325,19 +340,19 @@ mod tests {
             extract_character_id_from_filename("Local_20260103_174237_2112699440.txt"),
             Some(2112699440)
         );
-        
+
         // Gamelog pattern with ID
         assert_eq!(
             extract_character_id_from_filename("20260103_221507_2114264203.txt"),
             Some(2114264203)
         );
-        
+
         // Old gamelog without ID (only date + time)
         assert_eq!(
             extract_character_id_from_filename("20250101_120000.txt"),
             None
         );
-        
+
         // Incomplete chatlog
         assert_eq!(
             extract_character_id_from_filename("Local_20260103_174237.txt"),
@@ -372,7 +387,7 @@ mod tests {
     #[test]
     fn test_scan_logs_with_prefix() {
         let dir = tempdir().unwrap();
-        
+
         // Create various logs
         create_chatlog(
             &dir.path().join("Local_20260103_174237_111.txt"),
@@ -393,7 +408,7 @@ mod tests {
         // Should only find Local logs
         let logs = scan_logs_dir(dir.path(), Some("Local"), LogType::Chatlog).unwrap();
         assert_eq!(logs.len(), 2);
-        
+
         // All logs if no prefix
         let all_logs = scan_logs_dir(dir.path(), None, LogType::Chatlog).unwrap();
         assert_eq!(all_logs.len(), 3);
@@ -409,7 +424,7 @@ mod tests {
     #[test]
     fn test_find_local_chatlog_by_id() {
         let dir = tempdir().unwrap();
-        
+
         create_chatlog(
             &dir.path().join("Local_20260103_100000_111.txt"),
             "CharA",

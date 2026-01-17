@@ -26,22 +26,29 @@ mod tests {
     fn benchmark_compute_dps_series_performance() {
         let event_count = 100_000;
         let events = generate_large_history(event_count);
-        
+
         // We want a window near the end, which is the worst case for O(N) linear scan
         let last_ts = events.last().unwrap().timestamp;
         let window = Duration::from_secs(5);
-        
+
         let start = Instant::now();
-        
+
         for _ in 0..100 {
             let _ = analysis::compute_dps_series(&events, window, last_ts);
         }
-        
+
         let duration = start.elapsed();
-        println!("Time for 100 iterations with {} events: {:?}", event_count, duration);
+        println!(
+            "Time for 100 iterations with {} events: {:?}",
+            event_count, duration
+        );
 
         // In release mode, 100 iterations of 100k events should be very fast if O(log N)
         // 500ms is a safe threshold for CI/local runs.
-        assert!(duration < Duration::from_millis(1000), "Performance is too slow! took {:?}", duration);
+        assert!(
+            duration < Duration::from_millis(1000),
+            "Performance is too slow! took {:?}",
+            duration
+        );
     }
 }
