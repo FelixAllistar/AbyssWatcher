@@ -173,7 +173,7 @@ const AlertSettings: FC<AlertSettingsProps> = ({ config, trackedCharacters, onCh
                                         checked={isEnabled}
                                         onChange={() => toggleRule(rule.id)}
                                     />
-                                    <span className="rule-name">{rule.name}</span>
+                                    <span className="rule-name" title={rule.description}>{rule.name}</span>
                                 </label>
                                 <div className="rule-cooldown">
                                     <input
@@ -187,7 +187,6 @@ const AlertSettings: FC<AlertSettingsProps> = ({ config, trackedCharacters, onCh
                                     <span className="cooldown-label">s</span>
                                 </div>
                             </div>
-                            <p className="rule-description">{rule.description}</p>
 
                             {/* Vorton filter for FriendlyFire and LogiTakingDamage */}
                             {(rule.id === 'FriendlyFire' || rule.id === 'LogiTakingDamage') && isEnabled && (
