@@ -28,6 +28,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "resources": {
       "ui/public/sounds/*": "sounds/"
     },
@@ -38,5 +39,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU4MzdFRDBFNUUyRUEzNzkKUldSNW95NWVEdTAzNkcwOWprcTdKTmU2RDd4QTh1TFFTd0tEMkkxYmR2TEIvVDRLRGs4OGh2ZjcK",
+      "endpoints": [
+        "https://github.com/FelixAllistar/AbyssWatcher/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

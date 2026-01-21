@@ -18,6 +18,7 @@ export type { DpsUpdate, CharacterState, CombatAction, TargetHit, Settings, Book
 
 import WindowFrame from './components/WindowFrame';
 import Tooltip from './components/Tooltip';
+import UpdateChecker from './components/UpdateChecker';
 
 function MainApp() {
   const [dpsData, setDpsData] = useState<DpsUpdate | null>(null);
@@ -266,6 +267,7 @@ function MainApp() {
 
   return (
     <WindowFrame variant="main" headerActions={headerControls}>
+      <UpdateChecker />
       <div id="app" className="main-overlay">
         {showSettings && (
           <div ref={settingsRef}>

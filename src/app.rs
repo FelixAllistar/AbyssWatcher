@@ -716,6 +716,10 @@ pub fn run() {
 
             app.handle().plugin(tauri_plugin_dialog::init())?;
 
+            // Initialize Auto-Updater
+            #[cfg(desktop)]
+            app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+
             // Start the background log watcher
             tauri::async_runtime::spawn(async move {
                 let mut current_log_dir = initial_settings.gamelog_dir.clone();

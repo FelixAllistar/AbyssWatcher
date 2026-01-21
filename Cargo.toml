@@ -9,6 +9,7 @@ description = "AbyssWatcher Tauri Frontend"
 tauri-build = { version = "2.0.4", features = [] }
 
 [dependencies]
+tauri-plugin-updater = "2"
 lazy_static = "1.5.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
