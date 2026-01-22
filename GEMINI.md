@@ -211,3 +211,14 @@ The project uses GitHub Actions for automated cross-platform releases.
   - **macOS**: `macos-latest` (Universal Binary: x86_64 + aarch64)
 - **Code Signing**:
   - macOS builds require Apple Developer secrets (`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, etc.) to be valid. Currently, these secrets must be configured in the repo settings for notarization to work.
+
+### Auto-Update System
+
+- **Plugins**: Uses `tauri-plugin-updater` (check/download) and `tauri-plugin-process` (relaunch).
+- **Permissions**: Requires `updater:default` and `process:default` in `capabilities/default.json`.
+- **Infrastructure**:
+  - **Source**: GitHub Releases (via `tauri-action` generating `latest.json`).
+  - **Signing**:
+    - **Private Key**: Stored in GitHub Secrets (`TAURI_SIGNING_PRIVATE_KEY` + `_PASSWORD`).
+    - **Public Key**: Embedded in `tauri.conf.json` (`plugins.updater.pubkey`).
+- **Flow**: App checks `latest.json` on startup -> Banner appears if new version -> User clicks Install -> Download verified -> App restarts.
