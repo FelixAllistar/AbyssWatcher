@@ -250,7 +250,7 @@ function MainApp() {
           setShowSettings(false);
         }}
       >
-        Chars
+        Chars.
       </button>
       <button
         ref={settingsBtnRef}
