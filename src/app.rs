@@ -720,6 +720,10 @@ pub fn run() {
             #[cfg(desktop)]
             app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
 
+            // Initialize Process plugin (for relaunch after update)
+            #[cfg(desktop)]
+            app.handle().plugin(tauri_plugin_process::init())?;
+
             // Start the background log watcher
             tauri::async_runtime::spawn(async move {
                 let mut current_log_dir = initial_settings.gamelog_dir.clone();
