@@ -68,17 +68,17 @@ export function UpdateChecker() {
     return (
         <div className="update-banner">
             <span className="update-text">
-                v{updateInfo.version} available
+                v{updateInfo.version} Update Available
             </span>
             {status === 'idle' && (
-                <>
+                <div className="update-actions">
                     <button className="update-btn install" onClick={handleUpdate}>
                         Install
                     </button>
                     <button className="update-btn dismiss" onClick={() => setDismissed(true)}>
-                        ✕
+                        Maybe Later
                     </button>
-                </>
+                </div>
             )}
             {status === 'downloading' && (
                 <span className="update-progress">{progress}%</span>
