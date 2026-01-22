@@ -667,6 +667,7 @@ fn spawn_audio_thread() -> std::sync::mpsc::Sender<AudioCommand> {
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_log::Builder::default().build())
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {

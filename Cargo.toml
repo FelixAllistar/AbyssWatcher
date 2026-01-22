@@ -1,6 +1,6 @@
 [package]
 name = "abyss-watcher"
-version = "0.1.11"
+version = "0.1.12"
 authors = ["Felix Allistar <147667330+FelixAllistar@users.noreply.github.com>"]
 edition = "2021"
 description = "AbyssWatcher Tauri Frontend"
@@ -22,6 +22,7 @@ tauri-plugin-log = "2.0.0-rc"
 tauri-plugin-dialog = "2.4.2"
 rodio = "0.21.1"
 tauri-plugin-process = "2"
+tauri-plugin-window-state = "2.4.1"
 
 [lib]
 name = "abyss_watcher"
